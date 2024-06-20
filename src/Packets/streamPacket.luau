@@ -2,7 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ByteNet = require(ReplicatedStorage:WaitForChild("ByteNet"))
 
-return ByteNet.defineNamespace("Broadcast", function()
+return ByteNet.defineNamespace("streamPacket", function()
     return {
         Screen = ByteNet.definePacket({
             value = ByteNet.struct({

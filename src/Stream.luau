@@ -10,7 +10,7 @@ type Impl = {
 
     Destroy: (self: Stream) -> (),
 
-    _Initialize: (self: Stream) -> ()
+    _Record: (self: Stream) -> ()
 
 }
 
@@ -42,6 +42,8 @@ local Mouse = LocalPlayer:GetMouse()
 local Camera = workspace.CurrentCamera
 
 local Broadcaster = ReplicatedStorage:WaitForChild("Broadcaster")
+
+local broadcastPacket = require(Broadcaster:WaitForChild("broadcastPacket"))
 local streamPacket = require(Broadcaster:WaitForChild("streamPacket"))
 
 --[[ Object ]]--
@@ -51,7 +53,11 @@ function module.new()
     self.active = false
     self.connections = {}
 
-    self:_Initialize()
+    broadcastPacket.SetActivate.listen(function(active: boolean)
+        self:SetActive(active)
+    end)
+
+    self:_Record()
 
     return self
 end
@@ -70,7 +76,7 @@ function Stream:Destroy()
     end
 end
 
-function Stream:_Initialize()
+function Stream:_Record()
     -- camera tracker
     do
         local tickStamp = tick()

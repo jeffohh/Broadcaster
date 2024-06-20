@@ -1,43 +1,7 @@
---!strict
---[[ Imports ]]--
+local RunService = game:GetService("RunService")
 
---[[ Header ]]--
-type Impl = {
-    __index: Impl,
-
-    View: (self: Broadcaster, player: Player) -> ()
-}
-
-type Proto = {
-    
-}
-
-local module = {}
-
-local Broadcaster: Impl = {} :: Impl
-Broadcaster.__index = Broadcaster
-
-export type Broadcaster = typeof(setmetatable({} :: Proto, {} :: Impl))
-
---[[ Globals ]]--
-
-
---[[ Services ]]--
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
---[[ Private Variables ]]--
-local streamPacket = require(script:WaitForChild("streamPacket"))
-
---[[ Object ]]--
-function module.new()
-    local self = setmetatable({} :: Proto, Broadcaster)
-
-    return self
+if (RunService:IsServer()) then
+    return require(script:WaitForChild("Server"))
+elseif (RunService:IsClient()) then
+    return require(script:WaitForChild("Client"))
 end
-
-function Broadcaster:View(player: Player)
-    
-end
-
-
-return module.new()
