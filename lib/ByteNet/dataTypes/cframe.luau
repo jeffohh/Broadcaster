@@ -25,8 +25,8 @@ local cframe = {
 		local x, y, z = value.X, value.Y, value.Z
 
 		local axis, angle = value:ToAxisAngle()
-		local rx, ry, rz = axis.X, axis.Y, axis.Z
 		axis = axis * angle
+		local rx, ry, rz = axis.X, axis.Y, axis.Z
 
 		-- Math done, write it now
 		alloc(24)
