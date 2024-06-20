@@ -4,6 +4,8 @@
 --[[ Header ]]--
 type Impl = {
     __index: Impl,
+
+    View: (self: Broadcaster, player: Player) -> ()
 }
 
 type Proto = {
@@ -23,6 +25,9 @@ export type Broadcaster = typeof(setmetatable({} :: Proto, {} :: Impl))
 --[[ Services ]]--
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+--[[ Private Variables ]]--
+local streamPacket = require(script:WaitForChild("streamPacket"))
+
 --[[ Object ]]--
 function module.new()
     local self = setmetatable({} :: Proto, Broadcaster)
@@ -30,9 +35,9 @@ function module.new()
     return self
 end
 
-function Broadcaster:RequestStream()
+function Broadcaster:View(player: Player)
     
 end
 
 
-return module
+return module.new()
