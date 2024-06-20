@@ -19,14 +19,19 @@ export type Broadcaster = typeof(setmetatable({} :: Proto, {} :: Impl))
 
 --[[ Globals ]]--
 
---[[ Services ]]--
 
+--[[ Services ]]--
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 --[[ Object ]]--
 function module.new()
     local self = setmetatable({} :: Proto, Broadcaster)
 
     return self
+end
+
+function Broadcaster:RequestStream()
+    
 end
 
 

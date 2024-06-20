@@ -1,6 +1,6 @@
 {
-  "name": "Broadcaster",
-  "tree": {
-    "$path": "src"
-  }
+    "name": "Broadcaster",
+    "tree": {
+      "$path": "src"
+    }
 }
