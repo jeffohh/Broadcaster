@@ -25,7 +25,6 @@ export type Server = typeof(setmetatable({} :: Proto, {} :: Impl))
 
 
 --[[ Services ]]--
-local Players = game:GetService("Players")
 
 --[[ Private Variables ]]--
 local ByteNetLibrary = script.Parent:WaitForChild("ByteNetLibrary")
@@ -78,6 +77,9 @@ end
 function Server:AddViewer(viewer: Player, subject: Player)
     if (viewer == subject) then return end
 
+    -- make them stop spectating whoever
+    self:RemoveViewer(viewer)
+
     -- if viewer was streaming, remove all viewers
     if (self.streamers[viewer]) then
         for _, player in next, self.streamers[viewer] do
@@ -96,7 +98,7 @@ function Server:AddViewer(viewer: Player, subject: Player)
 
     -- send to streamer, turn stream on
     broadcastPacket.SetActivate.sendTo(true, subject)
-    broadcastPacket.Watching.sendTo(true, viewer)
+    broadcastPacket.SetWatching.sendTo(true, viewer)
 end
 
 function Server:RemoveViewer(viewer: Player)
@@ -115,7 +117,7 @@ function Server:RemoveViewer(viewer: Player)
     end
 
     self.viewers[viewer] = nil
-    broadcastPacket.Watching.sendTo(false, viewer)
+    broadcastPacket.SetWatching.sendTo(false, viewer)
 end
 
 

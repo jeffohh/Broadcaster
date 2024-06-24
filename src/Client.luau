@@ -8,13 +8,17 @@ type Impl = {
     View: (self: Client, player: Player) -> (),
     Leave: (self: Client) -> (),
 
-    SendSnapshot: (self: Client) -> (),
-    SendInput: (self: Client, name: string, state: string) -> ()
+    _SendSnapshot: (self: Client) -> (),
+    _SendInput: (self: Client, name: string, state: string) -> ()
 }
 
 type Proto = {
     active: boolean,
-    watching: boolean
+    watching: boolean,
+
+    OnWatchingChanged: (watching: boolean) -> (),
+    OnScreenChanged: (cframe: CFrame, mouseHitPosition: Vector3) -> (),
+    OnInputChanged: (name: string, state: string) -> ()
 }
 
 local module = {}
@@ -27,13 +31,10 @@ export type Client = typeof(setmetatable({} :: Proto, {} :: Impl))
 --[[ Globals ]]--
 local STREAM_MAX_FPS = 60
 
-local LINEAR_TWEEN = TweenInfo.new(1/STREAM_MAX_FPS, Enum.EasingStyle.Linear)
-
 --[[ Services ]]--
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 
 --[[ Private Variables ]]--
 local LocalPlayer = Players.LocalPlayer
@@ -54,12 +55,7 @@ function module.new()
     self.active = false
     self.watching = false
 
-    broadcastPacket.SetActivate.listen(function(active: boolean)
-        self.active = active
-    end)
-
-    broadcastPacket.Watching.listen(function(enabled: boolean)
-        self.watching = enabled
+    self.OnWatchingChanged = function(enabled: boolean)
         if (self.watching) then
             Controls:Disable()
             Camera.CameraType = Enum.CameraType.Scriptable
@@ -67,6 +63,18 @@ function module.new()
             Controls:Enable()
             Camera.CameraType = Enum.CameraType.Custom
         end
+    end
+    
+    self.OnScreenChanged = function() end
+    self.OnInputChanged = function() end
+
+    broadcastPacket.SetActivate.listen(function(active: boolean)
+        self.active = active
+    end)
+
+    broadcastPacket.SetWatching.listen(function(enabled: boolean)
+        self.watching = enabled
+        self.OnWatchingChanged(enabled)
     end)
 
     streamPacket.Screen.listen(function(data)
@@ -75,7 +83,7 @@ function module.new()
         local cameraCFrame = data.CFrame
         local mouseHitPosition = data.MouseHitPosition
 
-        TweenService:Create(Camera, LINEAR_TWEEN, {CFrame = cameraCFrame}):Play()
+        self.OnScreenChanged(cameraCFrame, mouseHitPosition)
     end)
 
     streamPacket.Input.listen(function(data)
@@ -83,6 +91,8 @@ function module.new()
 
         local name = data.Name
         local state = data.State
+
+        self.OnInputChanged(name, state)
     end)
 
 
@@ -92,7 +102,7 @@ function module.new()
         if (currentFrame - lastFrame < 1 / STREAM_MAX_FPS) then return end
 
         lastFrame = currentFrame
-        self:SendSnapshot()
+        self:_SendSnapshot()
     end)
     
     UserInputService.InputBegan:Connect(function(input: InputObject)
@@ -103,7 +113,7 @@ function module.new()
             name = input.UserInputType.Name
         end
 
-        self:SendInput(name, "Begin")
+        self:_SendInput(name, "Begin")
     end)
 
     UserInputService.InputEnded:Connect(function(input: InputObject)
@@ -114,7 +124,7 @@ function module.new()
             name = input.UserInputType.Name
         end
 
-        self:SendInput(name, "End")
+        self:_SendInput(name, "End")
     end)
 
     return self
@@ -128,7 +138,7 @@ function Client:Leave()
     broadcastPacket.Leave.send(LocalPlayer)
 end
 
-function Client:SendSnapshot()
+function Client:_SendSnapshot()
     if (not self.active) then return end
 
     streamPacket.Screen.send({
@@ -137,7 +147,7 @@ function Client:SendSnapshot()
     })
 end
 
-function Client:SendInput(name: string, state: string)
+function Client:_SendInput(name: string, state: string)
     if (not self.active) then return end
 
     streamPacket.Input.send({

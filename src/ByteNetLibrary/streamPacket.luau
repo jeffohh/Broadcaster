@@ -5,6 +5,7 @@ local ByteNet = require(ReplicatedStorage:WaitForChild("ByteNet"))
 return ByteNet.defineNamespace("streamPacket", function()
     return {
         Screen = ByteNet.definePacket({
+            reliabilityType = "unreliable",
             value = ByteNet.struct({
                 CFrame = ByteNet.cframe,
                 MouseHitPosition = ByteNet.vect3

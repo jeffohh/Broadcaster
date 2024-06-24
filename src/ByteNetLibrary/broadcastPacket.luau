@@ -16,7 +16,7 @@ return ByteNet.defineNamespace("broadcastPacket", function()
             value = ByteNet.bool
         }),
 
-        Watching = ByteNet.definePacket({
+        SetWatching = ByteNet.definePacket({
             value = ByteNet.bool
         })
     }
