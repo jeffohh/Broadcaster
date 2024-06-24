@@ -56,6 +56,14 @@ function module.new()
         end
     end)
 
+    streamPacket.MouseIcon.listen(function(data, player: Player)
+        local listeners = self.streamers[player]
+        
+        for i=1, #listeners do
+            streamPacket.MouseIcon.sendTo(data, listeners[i])
+        end
+    end)
+
     -- viewer handling
     broadcastPacket.View.listen(function(data, player: Player)
         local viewer = player

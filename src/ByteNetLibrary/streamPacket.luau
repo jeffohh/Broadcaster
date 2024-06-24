@@ -17,6 +17,10 @@ return ByteNet.defineNamespace("streamPacket", function()
                 Name = ByteNet.string,
                 State = ByteNet.string
             })
+        }),
+
+        MouseIcon = ByteNet.definePacket({
+            value = ByteNet.string
         })
     }
 end)

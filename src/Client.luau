@@ -18,7 +18,8 @@ type Proto = {
 
     OnWatchingChanged: (watching: boolean) -> (),
     OnScreenChanged: (cframe: CFrame, mouseHitPosition: Vector3) -> (),
-    OnInputChanged: (name: string, state: string) -> ()
+    OnInputChanged: (name: string, state: string) -> (),
+    OnMouseIconChanged: (icon: string) -> ()
 }
 
 local module = {}
@@ -64,9 +65,9 @@ function module.new()
             Camera.CameraType = Enum.CameraType.Custom
         end
     end
-    
     self.OnScreenChanged = function() end
     self.OnInputChanged = function() end
+    self.OnMouseIconChanged = function() end
 
     broadcastPacket.SetActivate.listen(function(active: boolean)
         self.active = active
@@ -74,6 +75,7 @@ function module.new()
 
     broadcastPacket.SetWatching.listen(function(enabled: boolean)
         self.watching = enabled
+        streamPacket.MouseIcon.send(Mouse.Icon) -- update mouse icon when they enter stream
         self.OnWatchingChanged(enabled)
     end)
 
@@ -95,9 +97,21 @@ function module.new()
         self.OnInputChanged(name, state)
     end)
 
+    streamPacket.MouseIcon.listen(function(data)
+        local icon = data
 
+        self.OnMouseIconChanged(icon)
+    end)
+
+    local currentIcon = Mouse.Icon
     local lastFrame = tick()
     RunService.RenderStepped:Connect(function()
+        if (currentIcon ~= Mouse.Icon) then
+            currentIcon = Mouse.Icon
+            streamPacket.MouseIcon.send(currentIcon)
+        end
+
+        -- frame limit
         local currentFrame = tick()
         if (currentFrame - lastFrame < 1 / STREAM_MAX_FPS) then return end
 
