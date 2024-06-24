@@ -1,5 +1,5 @@
 {
-  "name": "broadcaster",
+  "name": "Broadcaster",
   "tree": {
     "$className": "DataModel",
 
@@ -9,6 +9,12 @@
       },
       "ByteNet": {
         "$path": "lib/ByteNet"
+      }
+    },
+
+    "ServerScriptService": {
+      "broadcasterInit": {
+        "$path": "dev/broadcasterInit.server.luau"
       }
     },
 

@@ -29,6 +29,8 @@ local Players = game:GetService("Players")
 
 --[[ Private Variables ]]--
 local ByteNetLibrary = script.Parent:WaitForChild("ByteNetLibrary")
+
+local streamPacket = require(ByteNetLibrary:WaitForChild("streamPacket"))
 local broadcastPacket = require(ByteNetLibrary:WaitForChild("broadcastPacket"))
 
 --[[ Object ]]--
@@ -38,6 +40,24 @@ function module.new()
     self.streamers = {}
     self.viewers = {}
 
+    -- packet handling
+    streamPacket.Screen.listen(function(data, player: Player)
+        local listeners = self.streamers[player]
+        
+        for i=1, #listeners do
+            streamPacket.Screen.sendTo(data, listeners[i])
+        end
+    end)
+
+    streamPacket.Input.listen(function(data, player: Player)
+        local listeners = self.streamers[player]
+        
+        for i=1, #listeners do
+            streamPacket.Input.sendTo(data, listeners[i])
+        end
+    end)
+
+    -- viewer handling
     broadcastPacket.View.listen(function(data, player: Player)
         local viewer = player
         local subject = data
@@ -56,29 +76,46 @@ end
 
 
 function Server:AddViewer(viewer: Player, subject: Player)
+    if (viewer == subject) then return end
+
+    -- if viewer was streaming, remove all viewers
+    if (self.streamers[viewer]) then
+        for _, player in next, self.streamers[viewer] do
+            self:RemoveViewer(player)
+        end
+    end
+
+    -- add viewer to viewer list, add viewer to streamer list
     self.viewers[viewer] = subject
-    
+
     if (not self.streamers[subject]) then
         self.streamers[subject] = {}
     end
 
     table.insert(self.streamers[subject], viewer)
+
     -- send to streamer, turn stream on
-    -- if viewer was streaming, remove all viewers
+    broadcastPacket.SetActivate.sendTo(true, subject)
+    broadcastPacket.Watching.sendTo(true, viewer)
 end
 
 function Server:RemoveViewer(viewer: Player)
     local subject = self.viewers[viewer]
 
-    if (subject) and (self.streamers[subject]) then
+    if (subject and self.streamers[subject]) then
         local index = table.find(self.streamers[subject], viewer)
         if (index) then
             table.remove(self.streamers[subject], index)
+
             -- send to streamer, turn stream off if no viewers
+            if (#self.streamers[subject] == 0) then
+                broadcastPacket.SetActivate.sendTo(false, subject)
+            end
         end
     end
 
     self.viewers[viewer] = nil
+    broadcastPacket.Watching.sendTo(false, viewer)
 end
 
 
