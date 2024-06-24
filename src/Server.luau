@@ -42,6 +42,7 @@ function module.new()
     -- packet handling
     streamPacket.Screen.listen(function(data, player: Player)
         local listeners = self.streamers[player]
+        if (not listeners) then return end
         
         for i=1, #listeners do
             streamPacket.Screen.sendTo(data, listeners[i])
@@ -50,6 +51,7 @@ function module.new()
 
     streamPacket.Input.listen(function(data, player: Player)
         local listeners = self.streamers[player]
+        if (not listeners) then return end
         
         for i=1, #listeners do
             streamPacket.Input.sendTo(data, listeners[i])
@@ -58,7 +60,8 @@ function module.new()
 
     streamPacket.MouseIcon.listen(function(data, player: Player)
         local listeners = self.streamers[player]
-        
+        if (not listeners) then return end
+
         for i=1, #listeners do
             streamPacket.MouseIcon.sendTo(data, listeners[i])
         end

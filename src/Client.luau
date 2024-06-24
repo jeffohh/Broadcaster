@@ -9,7 +9,11 @@ type Impl = {
     Leave: (self: Client) -> (),
 
     _SendSnapshot: (self: Client) -> (),
-    _SendInput: (self: Client, name: string, state: string) -> ()
+    _SendInput: (self: Client, name: string, state: string) -> (),
+
+    Settings: {
+        STREAM_MAX_FPS: number
+    }
 }
 
 type Proto = {
@@ -30,7 +34,10 @@ Client.__index = Client
 export type Client = typeof(setmetatable({} :: Proto, {} :: Impl))
 
 --[[ Globals ]]--
-local STREAM_MAX_FPS = 60
+local Settings = {}
+Settings.STREAM_MAX_FPS = 60
+
+Client.Settings = Settings
 
 --[[ Services ]]--
 local UserInputService = game:GetService("UserInputService")
@@ -113,7 +120,7 @@ function module.new()
 
         -- frame limit
         local currentFrame = tick()
-        if (currentFrame - lastFrame < 1 / STREAM_MAX_FPS) then return end
+        if (currentFrame - lastFrame < 1 / self.Settings.STREAM_MAX_FPS) then return end
 
         lastFrame = currentFrame
         self:_SendSnapshot()

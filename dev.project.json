@@ -21,7 +21,10 @@
     "StarterPlayer": {
       "StarterPlayerScripts": {
         "Client": {
-          "$path": "dev/test.client.luau"
+          "$path": "dev/test.client.luau",
+          "$properties": {
+            "Disabled": true
+          }
         }
       }
     },

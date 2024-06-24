@@ -8,7 +8,7 @@ return ByteNet.defineNamespace("streamPacket", function()
             reliabilityType = "unreliable",
             value = ByteNet.struct({
                 CFrame = ByteNet.cframe,
-                MouseHitPosition = ByteNet.vect3
+                MouseHitPosition = ByteNet.vec3
             })
         }),
 
