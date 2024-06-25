@@ -82,7 +82,7 @@ function module.new()
 
     broadcastPacket.SetWatching.listen(function(enabled: boolean)
         self.watching = enabled
-        streamPacket.MouseIcon.send(Mouse.Icon) -- update mouse icon when they enter stream
+        streamPacket.MouseIcon.send(UserInputService.MouseIcon) -- update mouse icon when they enter stream
         self.OnWatchingChanged(enabled)
     end)
 
@@ -110,11 +110,11 @@ function module.new()
         self.OnMouseIconChanged(icon)
     end)
 
-    local currentIcon = Mouse.Icon
+    local currentIcon = UserInputService.MouseIcon
     local lastFrame = tick()
     RunService.RenderStepped:Connect(function()
-        if (currentIcon ~= Mouse.Icon) then
-            currentIcon = Mouse.Icon
+        if (currentIcon ~= UserInputService.MouseIcon) then
+            currentIcon = UserInputService.MouseIcon
             streamPacket.MouseIcon.send(currentIcon)
         end
 
