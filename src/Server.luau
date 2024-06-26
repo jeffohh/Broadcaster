@@ -23,14 +23,13 @@ export type Server = typeof(setmetatable({} :: Proto, {} :: Impl))
 
 --[[ Globals ]]--
 
-
 --[[ Services ]]--
 
 --[[ Private Variables ]]--
-local ByteNetLibrary = script.Parent:WaitForChild("ByteNetLibrary")
+local Packets = script.Parent:WaitForChild("Packets")
 
-local streamPacket = require(ByteNetLibrary:WaitForChild("streamPacket"))
-local broadcastPacket = require(ByteNetLibrary:WaitForChild("broadcastPacket"))
+local streamPacket = require(Packets:WaitForChild("streamPacket"))
+local broadcastPacket = require(Packets:WaitForChild("broadcastPacket"))
 
 --[[ Object ]]--
 function module.new()
@@ -39,7 +38,7 @@ function module.new()
     self.streamers = {}
     self.viewers = {}
 
-    -- packet handling
+    -- packet redirecting
     streamPacket.Screen.listen(function(data, player: Player)
         local listeners = self.streamers[player]
         if (not listeners) then return end

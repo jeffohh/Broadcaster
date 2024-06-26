@@ -1,5 +1,8 @@
 --!strict
 --[[ Imports ]]--
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Signal = require(ReplicatedStorage:WaitForChild("GoodSignal"))
 
 --[[ Header ]]--
 type Impl = {
@@ -20,10 +23,10 @@ type Proto = {
     active: boolean,
     watching: boolean,
 
-    OnWatchingChanged: (watching: boolean) -> (),
-    OnScreenChanged: (cframe: CFrame, mouseHitPosition: Vector3) -> (),
-    OnInputChanged: (name: string, state: string) -> (),
-    OnMouseIconChanged: (icon: string) -> ()
+    OnWatchingChanged: Signal.Signal<boolean>,
+    OnScreenChanged: Signal.Signal<CFrame, Vector3>,
+    OnInputChanged: Signal.Signal<string, string>,
+    OnMouseIconChanged: Signal.Signal<string>
 }
 
 local module = {}
@@ -49,12 +52,10 @@ local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 local Camera = workspace.CurrentCamera
 
-local Controls = require(LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")):GetControls()
+local Packets = script.Parent:WaitForChild("Packets")
 
-local ByteNetLibrary = script.Parent:WaitForChild("ByteNetLibrary")
-
-local streamPacket = require(ByteNetLibrary:WaitForChild("streamPacket"))
-local broadcastPacket = require(ByteNetLibrary:WaitForChild("broadcastPacket"))
+local streamPacket = require(Packets:WaitForChild("streamPacket"))
+local broadcastPacket = require(Packets:WaitForChild("broadcastPacket"))
 
 --[[ Object ]]--
 function module.new()
@@ -63,18 +64,15 @@ function module.new()
     self.active = false
     self.watching = false
 
-    self.OnWatchingChanged = function(enabled: boolean)
-        if (self.watching) then
-            Controls:Disable()
-            Camera.CameraType = Enum.CameraType.Scriptable
-        else
-            Controls:Enable()
-            Camera.CameraType = Enum.CameraType.Custom
-        end
-    end
-    self.OnScreenChanged = function() end
-    self.OnInputChanged = function() end
-    self.OnMouseIconChanged = function() end
+    local OnWatchingChanged = Signal.new()
+    local OnScreenChanged = Signal.new()
+    local OnInputChanged = Signal.new()
+    local OnMouseIconChanged = Signal.new()
+
+	self.OnWatchingChanged = OnWatchingChanged
+	self.OnScreenChanged = OnScreenChanged
+	self.OnInputChanged = OnInputChanged
+	self.OnMouseIconChanged = OnMouseIconChanged
 
     broadcastPacket.SetActivate.listen(function(active: boolean)
         self.active = active
@@ -82,8 +80,9 @@ function module.new()
 
     broadcastPacket.SetWatching.listen(function(enabled: boolean)
         self.watching = enabled
-        streamPacket.MouseIcon.send(UserInputService.MouseIcon) -- update mouse icon when they enter stream
-        self.OnWatchingChanged(enabled)
+        streamPacket.MouseIcon.send(UserInputService.MouseIcon)
+
+        OnWatchingChanged:Fire(enabled)
     end)
 
     streamPacket.Screen.listen(function(data)
@@ -92,7 +91,7 @@ function module.new()
         local cameraCFrame = data.CFrame
         local mouseHitPosition = data.MouseHitPosition
 
-        self.OnScreenChanged(cameraCFrame, mouseHitPosition)
+        OnScreenChanged:Fire(cameraCFrame, mouseHitPosition)
     end)
 
     streamPacket.Input.listen(function(data)
@@ -101,13 +100,14 @@ function module.new()
         local name = data.Name
         local state = data.State
 
-        self.OnInputChanged(name, state)
+        print(self.OnInputChanged)
+        OnInputChanged:Fire(name, state)
     end)
 
     streamPacket.MouseIcon.listen(function(data)
         local icon = data
 
-        self.OnMouseIconChanged(icon)
+        OnMouseIconChanged:Fire(icon)
     end)
 
     local currentIcon = UserInputService.MouseIcon

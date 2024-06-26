@@ -1,11 +1,11 @@
 local Broadcaster = require(game.ReplicatedStorage.Broadcaster)
 
-Broadcaster.OnScreenChanged = function(cframe: CFrame, mouseHitPosition: Vector3)
-    
-end
+Broadcaster.OnScreenChanged:Connect(function(cframe: CFrame, mouseHitPosition: Vector3)
+    print("1")
+end)
 
-Broadcaster.OnInputChanged = function(name: string, state: string)
+Broadcaster.OnInputChanged:Connect(function(name: string, state: string)
     print(name, state)
-end
+end)
 
 Broadcaster:View(game.Players:WaitForChild("Player2"))
