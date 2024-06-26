@@ -100,7 +100,6 @@ function module.new()
         local name = data.Name
         local state = data.State
 
-        print(self.OnInputChanged)
         OnInputChanged:Fire(name, state)
     end)
 
