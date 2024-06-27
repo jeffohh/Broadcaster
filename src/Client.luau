@@ -2,7 +2,7 @@
 --[[ Imports ]]--
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Signal = require(ReplicatedStorage:WaitForChild("GoodSignal"))
+local LemonSignal = require(ReplicatedStorage:WaitForChild("LemonSignal"))
 
 --[[ Header ]]--
 type Impl = {
@@ -23,10 +23,10 @@ type Proto = {
     active: boolean,
     watching: boolean,
 
-    OnWatchingChanged: Signal.Signal<boolean>,
-    OnScreenChanged: Signal.Signal<CFrame, Vector3>,
-    OnInputChanged: Signal.Signal<string, string>,
-    OnMouseIconChanged: Signal.Signal<string>
+    OnWatchingChanged: LemonSignal.Signal<boolean>,
+    OnScreenChanged: LemonSignal.Signal<CFrame, Vector3>,
+    OnInputChanged: LemonSignal.Signal<string, string>,
+    OnMouseIconChanged: LemonSignal.Signal<string>
 }
 
 local module = {}
@@ -64,10 +64,10 @@ function module.new()
     self.active = false
     self.watching = false
 
-    local OnWatchingChanged = Signal.new()
-    local OnScreenChanged = Signal.new()
-    local OnInputChanged = Signal.new()
-    local OnMouseIconChanged = Signal.new()
+    local OnWatchingChanged = LemonSignal.new()
+    local OnScreenChanged = LemonSignal.new()
+    local OnInputChanged = LemonSignal.new()
+    local OnMouseIconChanged = LemonSignal.new()
 
 	self.OnWatchingChanged = OnWatchingChanged
 	self.OnScreenChanged = OnScreenChanged

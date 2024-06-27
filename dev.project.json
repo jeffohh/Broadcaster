@@ -10,8 +10,8 @@
       "ByteNet": {
         "$path": "lib/ByteNet"
       },
-      "GoodSignal": {
-        "$path": "lib/GoodSignal.lua"
+      "LemonSignal": {
+        "$path": "lib/LemonSignal.lua"
       }
     },
 
@@ -26,7 +26,7 @@
         "Client": {
           "$path": "dev/test.client.luau",
           "$properties": {
-            "Disabled": false
+            "Disabled": true
           }
         }
       }
