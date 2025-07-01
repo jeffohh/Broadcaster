@@ -15,4 +15,38 @@ event Request {
     Data: (Action[])
 }
 
+-- core camera
+event Camera {
+    From: Server,
+    Type: Unreliable,
+    Call: ManySync,
+    Data: (f32, CFrame<f32, f32>)
+}
 
+event MousePosition {
+    From: Server,
+    Type: Unreliable,
+    Call: ManySync,
+    Data: (f32, u16, u16)
+}
+
+event ViewportSize {
+    From: Server,
+    Type: Reliable,
+    Call: ManySync,
+    Data: (u16, u16)
+}
+
+event MouseIcon {
+    From: Server,
+    Type: Reliable,
+    Call: ManySync,
+    Data: (string(0..255))
+}
+
+event MouseTarget {
+    From: Server,
+    Type: Reliable,
+    Call: ManySync,
+    Data: (Instance(BasePart)?, vector?)
+}

@@ -152,13 +152,13 @@ local Queue: any = {
 }
 
 Queue.Reliable[0] = table.create(256)
-Queue.Unreliable[0] = table.create(256)
-Queue.Unreliable[1] = table.create(256)
-Queue.Reliable[2] = table.create(256)
-Queue.Reliable[3] = table.create(256)
-Queue.Reliable[4] = table.create(256)
+Queue.Unreliable[2] = table.create(256)
+Queue.Unreliable[3] = table.create(256)
+Queue.Reliable[5] = table.create(256)
+Queue.Reliable[6] = table.create(256)
+Queue.Reliable[7] = table.create(256)
 export type Viewer_Action = { Action: "View", Player: Player } | { Action: "Leave",  }
-export type Streamer_Action = ("Online" | "Offline")
+export type Streamer_Action = { Action: "SetStreaming", value: boolean } | { Action: "SetWatching", value: boolean }
 local function Viewer_ReadEVENT_Request(): ({ { Action: "View", Player: Player } | { Action: "Leave",  } })
 	-- Read BLOCK: 2 bytes
 	local BLOCK_START = Read(2)
@@ -194,10 +194,68 @@ local function Viewer_ReadEVENT_Request(): ({ { Action: "View", Player: Player }
 	return Value1
 end
 
-local function Streamer_WriteEVENT_Request(Value1: { ("Online" | "Offline") }): ()
+local function Viewer_WriteEVENT_Camera(Value1: number, Value2: CFrame): ()
+	-- Allocate BLOCK: 29 bytes
+	local BLOCK_START = Allocate(29)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
+	buffer.writef32(SendBuffer, BLOCK_START + 1, Value1)
+	local Vector = Value2.Position
+	buffer.writef32(SendBuffer, BLOCK_START + 5, Vector.X)
+	buffer.writef32(SendBuffer, BLOCK_START + 9, Vector.Y)
+	buffer.writef32(SendBuffer, BLOCK_START + 13, Vector.Z)
+	local rX, rY, rZ = Value2:ToOrientation()
+	buffer.writef32(SendBuffer, BLOCK_START + 17, rX)
+	buffer.writef32(SendBuffer, BLOCK_START + 21, rY)
+	buffer.writef32(SendBuffer, BLOCK_START + 25, rZ)
+end
+
+local function Viewer_WriteEVENT_MousePosition(Value1: number, Value2: number, Value3: number): ()
+	-- Allocate BLOCK: 9 bytes
+	local BLOCK_START = Allocate(9)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 1)
+	buffer.writef32(SendBuffer, BLOCK_START + 1, Value1)
+	buffer.writeu16(SendBuffer, BLOCK_START + 5, Value2)
+	buffer.writeu16(SendBuffer, BLOCK_START + 7, Value3)
+end
+
+local function Viewer_WriteEVENT_ViewportSize(Value1: number, Value2: number): ()
+	-- Allocate BLOCK: 5 bytes
+	local BLOCK_START = Allocate(5)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 1)
+	buffer.writeu16(SendBuffer, BLOCK_START + 1, Value1)
+	buffer.writeu16(SendBuffer, BLOCK_START + 3, Value2)
+end
+
+local function Viewer_WriteEVENT_MouseIcon(Value1: string): ()
+	-- Allocate BLOCK: 2 bytes
+	local BLOCK_START = Allocate(2)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 2)
+	local Length = #Value1
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value1, Length)
+end
+
+local function Viewer_WriteEVENT_MouseTarget(Value1: BasePart?, Value2: Vector3?): ()
+	-- Allocate BLOCK: 2 bytes
+	local BLOCK_START = Allocate(2)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 3)
+	table.insert(SendInstances, Value1 or Null)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, Value2 ~= nil and 1 or 0)
+	if Value2 ~= nil then
+		-- Allocate BLOCK: 12 bytes
+		local BLOCK_START = Allocate(12)
+		local Vector = Value2
+		buffer.writef32(SendBuffer, BLOCK_START + 0, Vector.X)
+		buffer.writef32(SendBuffer, BLOCK_START + 4, Vector.Y)
+		buffer.writef32(SendBuffer, BLOCK_START + 8, Vector.Z)
+	end
+end
+
+local function Streamer_WriteEVENT_Request(Value1: { { Action: "SetStreaming", value: boolean } | { Action: "SetWatching", value: boolean } }): ()
 	-- Allocate BLOCK: 3 bytes
 	local BLOCK_START = Allocate(3)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 4)
 	-- START ARRAY
 	buffer.writeu16(SendBuffer, BLOCK_START + 1, #Value1)
 		-- Allocate BLOCK: 1 bytes
@@ -207,37 +265,45 @@ local function Streamer_WriteEVENT_Request(Value1: { ("Online" | "Offline") }): 
 		-- Allocate 1
 		local OPERATION_OFFSET_0 = ARRAY_START_1
 		ARRAY_START_1 += 1
-		if Item_1 == "Online" then
+		if Item_1.Action == "SetStreaming" then
 			buffer.writeu8(SendBuffer, OPERATION_OFFSET_0, 0)
-		elseif Item_1 == "Offline" then
+			-- Allocate BLOCK: 1 bytes
+			local BLOCK_START = Allocate(1)
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Item_1.value and 1 or 0)
+		elseif Item_1.Action == "SetWatching" then
 			buffer.writeu8(SendBuffer, OPERATION_OFFSET_0, 1)
+			-- Allocate BLOCK: 1 bytes
+			local BLOCK_START = Allocate(1)
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Item_1.value and 1 or 0)
 		else
-			error(`Unexpected enum: {Item_1}, expected one of "Online" or "Offline".`)
+			error(`Unexpected variant: {Item_1.Action}`)
 		end
 	end
 	-- END ARRAY
 end
 
-local function Streamer_ReadEVENT_Camera(): (CFrame)
-	-- Read BLOCK: 24 bytes
-	local BLOCK_START = Read(24)
-	local X = buffer.readf32(RecieveBuffer, BLOCK_START + 0)
-	local Y = buffer.readf32(RecieveBuffer, BLOCK_START + 4)
-	local Z = buffer.readf32(RecieveBuffer, BLOCK_START + 8)
+local function Streamer_ReadEVENT_Camera(): (number, CFrame)
+	-- Read BLOCK: 28 bytes
+	local BLOCK_START = Read(28)
+	local Value1 = buffer.readf32(RecieveBuffer, BLOCK_START + 0)
+	local X = buffer.readf32(RecieveBuffer, BLOCK_START + 4)
+	local Y = buffer.readf32(RecieveBuffer, BLOCK_START + 8)
+	local Z = buffer.readf32(RecieveBuffer, BLOCK_START + 12)
 	local Position = Vector3.new(X, Y, Z)
-	local rX = buffer.readf32(RecieveBuffer, BLOCK_START + 12)
-	local rY = buffer.readf32(RecieveBuffer, BLOCK_START + 16)
-	local rZ = buffer.readf32(RecieveBuffer, BLOCK_START + 20)
-	local Value1 = CFrame.new(Position) * CFrame.fromOrientation(rX, rY, rZ)
-	return Value1
+	local rX = buffer.readf32(RecieveBuffer, BLOCK_START + 16)
+	local rY = buffer.readf32(RecieveBuffer, BLOCK_START + 20)
+	local rZ = buffer.readf32(RecieveBuffer, BLOCK_START + 24)
+	local Value2 = CFrame.new(Position) * CFrame.fromOrientation(rX, rY, rZ)
+	return Value1, Value2
 end
 
-local function Streamer_ReadEVENT_MousePosition(): (number, number)
-	-- Read BLOCK: 4 bytes
-	local BLOCK_START = Read(4)
-	local Value1 = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
-	local Value2 = buffer.readu16(RecieveBuffer, BLOCK_START + 2)
-	return Value1, Value2
+local function Streamer_ReadEVENT_MousePosition(): (number, number, number)
+	-- Read BLOCK: 8 bytes
+	local BLOCK_START = Read(8)
+	local Value1 = buffer.readf32(RecieveBuffer, BLOCK_START + 0)
+	local Value2 = buffer.readu16(RecieveBuffer, BLOCK_START + 4)
+	local Value3 = buffer.readu16(RecieveBuffer, BLOCK_START + 6)
+	return Value1, Value2, Value3
 end
 
 local function Streamer_ReadEVENT_ViewportSize(): (number, number)
@@ -288,6 +354,36 @@ if not RunService:IsRunning() then
 	Viewer = {
 		Request = {
 			On = NOOP
+		},
+		Camera = {
+			Fire = NOOP,
+			FireAll = NOOP,
+			FireList = NOOP,
+			FireExcept = NOOP
+		},
+		MousePosition = {
+			Fire = NOOP,
+			FireAll = NOOP,
+			FireList = NOOP,
+			FireExcept = NOOP
+		},
+		ViewportSize = {
+			Fire = NOOP,
+			FireAll = NOOP,
+			FireList = NOOP,
+			FireExcept = NOOP
+		},
+		MouseIcon = {
+			Fire = NOOP,
+			FireAll = NOOP,
+			FireList = NOOP,
+			FireExcept = NOOP
+		},
+		MouseTarget = {
+			Fire = NOOP,
+			FireAll = NOOP,
+			FireList = NOOP,
+			FireExcept = NOOP
 		},
 	},
 	Streamer = {
@@ -380,35 +476,35 @@ Reliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instance
 				end
 				table.insert(Queue.Reliable[0], {Player, Value1} :: {any})
 			end
-		elseif Index == 2 then
+		elseif Index == 5 then
 			local Value1: number, Value2: number = Streamer_ReadEVENT_ViewportSize()
-			if Events.Reliable[2] ~= nil then
-				Events.Reliable[2](Player, Value1, Value2)
+			if Events.Reliable[5] ~= nil then
+				Events.Reliable[5](Player, Value1, Value2)
 			else
-				if #Queue.Reliable[2] > 256 then
+				if #Queue.Reliable[5] > 256 then
 					warn("[Blink]: Event queue of \"ViewportSize\" exceeded 256, did you forget to implement a listener?")
 				end
-				table.insert(Queue.Reliable[2], {Player, Value1, Value2} :: {any})
+				table.insert(Queue.Reliable[5], {Player, Value1, Value2} :: {any})
 			end
-		elseif Index == 3 then
+		elseif Index == 6 then
 			local Value1: string = Streamer_ReadEVENT_MouseIcon()
-			if Events.Reliable[3] ~= nil then
-				Events.Reliable[3](Player, Value1)
+			if Events.Reliable[6] ~= nil then
+				Events.Reliable[6](Player, Value1)
 			else
-				if #Queue.Reliable[3] > 256 then
+				if #Queue.Reliable[6] > 256 then
 					warn("[Blink]: Event queue of \"MouseIcon\" exceeded 256, did you forget to implement a listener?")
 				end
-				table.insert(Queue.Reliable[3], {Player, Value1} :: {any})
+				table.insert(Queue.Reliable[6], {Player, Value1} :: {any})
 			end
-		elseif Index == 4 then
+		elseif Index == 7 then
 			local Value1: BasePart?, Value2: Vector3? = Streamer_ReadEVENT_MouseTarget()
-			if Events.Reliable[4] ~= nil then
-				Events.Reliable[4](Player, Value1, Value2)
+			if Events.Reliable[7] ~= nil then
+				Events.Reliable[7](Player, Value1, Value2)
 			else
-				if #Queue.Reliable[4] > 256 then
+				if #Queue.Reliable[7] > 256 then
 					warn("[Blink]: Event queue of \"MouseTarget\" exceeded 256, did you forget to implement a listener?")
 				end
-				table.insert(Queue.Reliable[4], {Player, Value1, Value2} :: {any})
+				table.insert(Queue.Reliable[7], {Player, Value1, Value2} :: {any})
 			end
 		end
 	end
@@ -423,15 +519,15 @@ Unreliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instan
 		-- Read BLOCK: 1 bytes
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-		if Index == 0 then
-			local Value1: CFrame = Streamer_ReadEVENT_Camera()
-			if Events.Unreliable[0] ~= nil then
-				Events.Unreliable[0](Player, Value1)
+		if Index == 2 then
+			local Value1: number, Value2: CFrame = Streamer_ReadEVENT_Camera()
+			if Events.Unreliable[2] ~= nil then
+				Events.Unreliable[2](Player, Value1, Value2)
 			end
-		elseif Index == 1 then
-			local Value1: number, Value2: number = Streamer_ReadEVENT_MousePosition()
-			if Events.Unreliable[1] ~= nil then
-				Events.Unreliable[1](Player, Value1, Value2)
+		elseif Index == 3 then
+			local Value1: number, Value2: number, Value3: number = Streamer_ReadEVENT_MousePosition()
+			if Events.Unreliable[3] ~= nil then
+				Events.Unreliable[3](Player, Value1, Value2, Value3)
 			end
 		end
 	end
@@ -456,15 +552,227 @@ local Returns = table.freeze({
 				end
 			end
 		},
+		Camera = {
+			Fire = function(Player: Player, Value1: number, Value2: CFrame): ()
+				Load()
+				Viewer_WriteEVENT_Camera(Value1, Value2)
+				local Buffer = buffer.create(SendCursor)
+				buffer.copy(Buffer, 0, SendBuffer, 0, SendCursor)
+				Unreliable:FireClient(Player, Buffer, SendInstances)
+			end,
+			FireAll = function(Value1: number, Value2: CFrame): ()
+				Load()
+				Viewer_WriteEVENT_Camera(Value1, Value2)
+				local Buffer = buffer.create(SendCursor)
+				buffer.copy(Buffer, 0, SendBuffer, 0, SendCursor)
+				Unreliable:FireAllClients(Buffer, SendInstances)
+			end,
+			FireList = function(List: {Player}, Value1: number, Value2: CFrame): ()
+				Load()
+				Viewer_WriteEVENT_Camera(Value1, Value2)
+				local Buffer = buffer.create(SendCursor)
+				buffer.copy(Buffer, 0, SendBuffer, 0, SendCursor)
+				for _, Player in List do
+					Unreliable:FireClient(Player, Buffer, SendInstances)
+				end
+			end,
+			FireExcept = function(Except: Player, Value1: number, Value2: CFrame): ()
+				Load()
+				Viewer_WriteEVENT_Camera(Value1, Value2)
+				local Buffer = buffer.create(SendCursor)
+				buffer.copy(Buffer, 0, SendBuffer, 0, SendCursor)
+				for _, Player in Players:GetPlayers() do
+					if Player == Except then
+						continue
+					end
+					Unreliable:FireClient(Player, Buffer, SendInstances)
+				end
+			end,
+		},
+		MousePosition = {
+			Fire = function(Player: Player, Value1: number, Value2: number, Value3: number): ()
+				Load()
+				Viewer_WriteEVENT_MousePosition(Value1, Value2, Value3)
+				local Buffer = buffer.create(SendCursor)
+				buffer.copy(Buffer, 0, SendBuffer, 0, SendCursor)
+				Unreliable:FireClient(Player, Buffer, SendInstances)
+			end,
+			FireAll = function(Value1: number, Value2: number, Value3: number): ()
+				Load()
+				Viewer_WriteEVENT_MousePosition(Value1, Value2, Value3)
+				local Buffer = buffer.create(SendCursor)
+				buffer.copy(Buffer, 0, SendBuffer, 0, SendCursor)
+				Unreliable:FireAllClients(Buffer, SendInstances)
+			end,
+			FireList = function(List: {Player}, Value1: number, Value2: number, Value3: number): ()
+				Load()
+				Viewer_WriteEVENT_MousePosition(Value1, Value2, Value3)
+				local Buffer = buffer.create(SendCursor)
+				buffer.copy(Buffer, 0, SendBuffer, 0, SendCursor)
+				for _, Player in List do
+					Unreliable:FireClient(Player, Buffer, SendInstances)
+				end
+			end,
+			FireExcept = function(Except: Player, Value1: number, Value2: number, Value3: number): ()
+				Load()
+				Viewer_WriteEVENT_MousePosition(Value1, Value2, Value3)
+				local Buffer = buffer.create(SendCursor)
+				buffer.copy(Buffer, 0, SendBuffer, 0, SendCursor)
+				for _, Player in Players:GetPlayers() do
+					if Player == Except then
+						continue
+					end
+					Unreliable:FireClient(Player, Buffer, SendInstances)
+				end
+			end,
+		},
+		ViewportSize = {
+			Fire = function(Player: Player, Value1: number, Value2: number): ()
+				Load(PlayersMap[Player])
+				Viewer_WriteEVENT_ViewportSize(Value1, Value2)
+				PlayersMap[Player] = Save()
+			end,
+			FireAll = function(Value1: number, Value2: number): ()
+				Load()
+				Viewer_WriteEVENT_ViewportSize(Value1, Value2)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireList = function(List: {Player}, Value1: number, Value2: number): ()
+				Load()
+				Viewer_WriteEVENT_ViewportSize(Value1, Value2)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in List do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireExcept = function(Except: Player, Value1: number, Value2: number): ()
+				Load()
+				Viewer_WriteEVENT_ViewportSize(Value1, Value2)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					if Player == Except then
+						continue
+					end
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+		},
+		MouseIcon = {
+			Fire = function(Player: Player, Value1: string): ()
+				Load(PlayersMap[Player])
+				Viewer_WriteEVENT_MouseIcon(Value1)
+				PlayersMap[Player] = Save()
+			end,
+			FireAll = function(Value1: string): ()
+				Load()
+				Viewer_WriteEVENT_MouseIcon(Value1)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireList = function(List: {Player}, Value1: string): ()
+				Load()
+				Viewer_WriteEVENT_MouseIcon(Value1)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in List do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireExcept = function(Except: Player, Value1: string): ()
+				Load()
+				Viewer_WriteEVENT_MouseIcon(Value1)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					if Player == Except then
+						continue
+					end
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+		},
+		MouseTarget = {
+			Fire = function(Player: Player, Value1: BasePart?, Value2: Vector3?): ()
+				Load(PlayersMap[Player])
+				Viewer_WriteEVENT_MouseTarget(Value1, Value2)
+				PlayersMap[Player] = Save()
+			end,
+			FireAll = function(Value1: BasePart?, Value2: Vector3?): ()
+				Load()
+				Viewer_WriteEVENT_MouseTarget(Value1, Value2)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireList = function(List: {Player}, Value1: BasePart?, Value2: Vector3?): ()
+				Load()
+				Viewer_WriteEVENT_MouseTarget(Value1, Value2)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in List do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireExcept = function(Except: Player, Value1: BasePart?, Value2: Vector3?): ()
+				Load()
+				Viewer_WriteEVENT_MouseTarget(Value1, Value2)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					if Player == Except then
+						continue
+					end
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+		},
 	},
 	Streamer = {
 		Request = {
-			Fire = function(Player: Player, Value1: { ("Online" | "Offline") }): ()
+			Fire = function(Player: Player, Value1: { { Action: "SetStreaming", value: boolean } | { Action: "SetWatching", value: boolean } }): ()
 				Load(PlayersMap[Player])
 				Streamer_WriteEVENT_Request(Value1)
 				PlayersMap[Player] = Save()
 			end,
-			FireAll = function(Value1: { ("Online" | "Offline") }): ()
+			FireAll = function(Value1: { { Action: "SetStreaming", value: boolean } | { Action: "SetWatching", value: boolean } }): ()
 				Load()
 				Streamer_WriteEVENT_Request(Value1)
 				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -476,7 +784,7 @@ local Returns = table.freeze({
 					PlayersMap[Player] = Save()
 				end
 			end,
-			FireList = function(List: {Player}, Value1: { ("Online" | "Offline") }): ()
+			FireList = function(List: {Player}, Value1: { { Action: "SetStreaming", value: boolean } | { Action: "SetWatching", value: boolean } }): ()
 				Load()
 				Streamer_WriteEVENT_Request(Value1)
 				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -488,7 +796,7 @@ local Returns = table.freeze({
 					PlayersMap[Player] = Save()
 				end
 			end,
-			FireExcept = function(Except: Player, Value1: { ("Online" | "Offline") }): ()
+			FireExcept = function(Except: Player, Value1: { { Action: "SetStreaming", value: boolean } | { Action: "SetWatching", value: boolean } }): ()
 				Load()
 				Streamer_WriteEVENT_Request(Value1)
 				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -505,63 +813,63 @@ local Returns = table.freeze({
 			end,
 		},
 		Camera = {
-			On = function(Listener: (Player: Player, Value1: CFrame) -> ()): () -> ()
-				Events.Unreliable[0] = Listener
+			On = function(Listener: (Player: Player, Value1: number, Value2: CFrame) -> ()): () -> ()
+				Events.Unreliable[2] = Listener
 				return function (): ()
-					if Events.Unreliable[0] == Listener then
-						Events.Unreliable[0] = nil
+					if Events.Unreliable[2] == Listener then
+						Events.Unreliable[2] = nil
 					end
 				end
 			end
 		},
 		MousePosition = {
-			On = function(Listener: (Player: Player, Value1: number, Value2: number) -> ()): () -> ()
-				Events.Unreliable[1] = Listener
+			On = function(Listener: (Player: Player, Value1: number, Value2: number, Value3: number) -> ()): () -> ()
+				Events.Unreliable[3] = Listener
 				return function (): ()
-					if Events.Unreliable[1] == Listener then
-						Events.Unreliable[1] = nil
+					if Events.Unreliable[3] == Listener then
+						Events.Unreliable[3] = nil
 					end
 				end
 			end
 		},
 		ViewportSize = {
 			On = function(Listener: (Player: Player, Value1: number, Value2: number) -> ()): () -> ()
-				Events.Reliable[2] = Listener
-				for Index, Arguments in Queue.Reliable[2] do
+				Events.Reliable[5] = Listener
+				for Index, Arguments in Queue.Reliable[5] do
 					Listener(table.unpack(Arguments))
 				end
-				Queue.Reliable[2] = {}
+				Queue.Reliable[5] = {}
 				return function (): ()
-					if Events.Reliable[2] == Listener then
-						Events.Reliable[2] = nil
+					if Events.Reliable[5] == Listener then
+						Events.Reliable[5] = nil
 					end
 				end
 			end
 		},
 		MouseIcon = {
 			On = function(Listener: (Player: Player, Value1: string) -> ()): () -> ()
-				Events.Reliable[3] = Listener
-				for Index, Arguments in Queue.Reliable[3] do
+				Events.Reliable[6] = Listener
+				for Index, Arguments in Queue.Reliable[6] do
 					Listener(table.unpack(Arguments))
 				end
-				Queue.Reliable[3] = {}
+				Queue.Reliable[6] = {}
 				return function (): ()
-					if Events.Reliable[3] == Listener then
-						Events.Reliable[3] = nil
+					if Events.Reliable[6] == Listener then
+						Events.Reliable[6] = nil
 					end
 				end
 			end
 		},
 		MouseTarget = {
 			On = function(Listener: (Player: Player, Value1: BasePart?, Value2: Vector3?) -> ()): () -> ()
-				Events.Reliable[4] = Listener
-				for Index, Arguments in Queue.Reliable[4] do
+				Events.Reliable[7] = Listener
+				for Index, Arguments in Queue.Reliable[7] do
 					Listener(table.unpack(Arguments))
 				end
-				Queue.Reliable[4] = {}
+				Queue.Reliable[7] = {}
 				return function (): ()
-					if Events.Reliable[4] == Listener then
-						Events.Reliable[4] = nil
+					if Events.Reliable[7] == Listener then
+						Events.Reliable[7] = nil
 					end
 				end
 			end

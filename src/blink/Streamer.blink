@@ -1,5 +1,12 @@
 
-enum Action = { Online, Offline }
+enum Action = "Action" {
+    SetStreaming {
+        value: boolean
+    },
+    SetWatching {
+        value: boolean
+    }
+}
 
 event Request {
     From: Server,
@@ -13,14 +20,14 @@ event Camera {
     From: Client,
     Type: Unreliable,
     Call: SingleSync,
-    Data: (CFrame<f32, f32>)
+    Data: (f32, CFrame<f32, f32>)
 }
 
 event MousePosition {
     From: Client,
     Type: Unreliable,
     Call: SingleSync,
-    Data: (u16, u16)
+    Data: (f32, u16, u16)
 }
 
 event ViewportSize {

@@ -147,7 +147,7 @@ local Queue: any = {
 }
 
 export type Viewer_Action = { Action: "View", Player: Player } | { Action: "Leave",  }
-export type Streamer_Action = ("Online" | "Offline")
+export type Streamer_Action = { Action: "SetStreaming", value: boolean } | { Action: "SetWatching", value: boolean }
 
 
 
