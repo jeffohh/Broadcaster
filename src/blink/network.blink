@@ -1,31 +1,6 @@
-option TypesOutput = "../shared/NetworkTypes.luau"
-option ClientOutput = "../player/Network.luau"
-option ServerOutput = "../server/Network.luau"
+option TypesOutput = "../shared/Broadcaster/NetworkTypes.luau"
+option ClientOutput = "../shared/Broadcaster/NetworkClient.luau"
+option ServerOutput = "../shared/Broadcaster/NetworkServer.luau"
 
-event Camera {
-    From: Client,
-    Type: Unreliable,
-    Call: SingleSync,
-    Data: (CFrame)
-}
-
-event MousePosition {
-    From: Client,
-    Type: Unreliable,
-    Call: SingleSync,
-    Data: (u16, u16)
-}
-
-event ViewportSize {
-    From: Client,
-    Type: Reliable,
-    Call: SingleSync,
-    Data: (u16, u16)
-}
-
-event MouseIcon {
-    From: Client,
-    Type: Reliable,
-    Call: SingleSync,
-    Data: (string)
-}
+import "./Viewer"
+import "./Streamer"

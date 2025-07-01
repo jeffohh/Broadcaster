@@ -1,0 +1,45 @@
+
+enum Action = { Online, Offline }
+
+event Request {
+    From: Server,
+    Type: Reliable,
+    Call: SingleSync,
+    Data: (Action[])
+}
+
+-- core camera
+event Camera {
+    From: Client,
+    Type: Unreliable,
+    Call: SingleSync,
+    Data: (CFrame<f32, f32>)
+}
+
+event MousePosition {
+    From: Client,
+    Type: Unreliable,
+    Call: SingleSync,
+    Data: (u16, u16)
+}
+
+event ViewportSize {
+    From: Client,
+    Type: Reliable,
+    Call: SingleSync,
+    Data: (u16, u16)
+}
+
+event MouseIcon {
+    From: Client,
+    Type: Reliable,
+    Call: SingleSync,
+    Data: (string(0..255))
+}
+
+event MouseTarget {
+    From: Client,
+    Type: Reliable,
+    Call: SingleSync,
+    Data: (Instance(BasePart)?, vector?)
+}

@@ -1,0 +1,18 @@
+
+enum Action = "Action" {
+    View {
+        Player: Instance(Player)
+    },
+    Leave {
+
+    }
+}
+
+event Request {
+    From: Client,
+    Type: Reliable,
+    Call: SingleSync,
+    Data: (Action[])
+}
+
+
