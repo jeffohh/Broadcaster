@@ -1,6 +1,34 @@
 {
-    "name": "Broadcaster",
-    "tree": {
-      "$path": "src"
+  "name": "Broadcaster",
+  "tree": {
+    "$className": "DataModel",
+    
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Common": {
+        "$path": "src/shared"
+      },
+      "Packages": {
+        "$path": "Packages"
+      }
+    },
+
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "$path": "src/server"
+    },
+
+    "StarterGui": {
+      "$className": "StarterGui",
+      "$path": "src/ui"
+    },
+
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "$path": "src/player"
+      }
     }
+  }
 }

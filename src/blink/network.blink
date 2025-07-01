@@ -1,0 +1,31 @@
+option TypesOutput = "../shared/NetworkTypes.luau"
+option ClientOutput = "../player/Network.luau"
+option ServerOutput = "../server/Network.luau"
+
+event Camera {
+    From: Client,
+    Type: Unreliable,
+    Call: SingleSync,
+    Data: (CFrame)
+}
+
+event MousePosition {
+    From: Client,
+    Type: Unreliable,
+    Call: SingleSync,
+    Data: (u16, u16)
+}
+
+event ViewportSize {
+    From: Client,
+    Type: Reliable,
+    Call: SingleSync,
+    Data: (u16, u16)
+}
+
+event MouseIcon {
+    From: Client,
+    Type: Reliable,
+    Call: SingleSync,
+    Data: (string)
+}
