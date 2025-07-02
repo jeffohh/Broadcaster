@@ -54,7 +54,6 @@ function module.new()
     self.viewers = {}
 
     NetworkServer.Viewer.Request.On(function(player, request)
-        print(player, request)
         if request.Action == "View" then
             self:View(player, request.Player)
         elseif request.Action == "Leave" then
@@ -93,7 +92,7 @@ function Server:View(viewer, streamer)
 
     -- send snapshot of cached screen
     local cached = self.cache[streamer]
-    NetworkServer.Viewer.Screen.Fire(viewer, cached.CameraStamp, cached.Camera, cached.MousePosition)
+    NetworkServer.Viewer.Screen.Fire(viewer, cached.ScreenStamp, cached.Camera, cached.MousePosition)
     NetworkServer.Viewer.MouseIcon.Fire(viewer, cached.MouseIcon)
 end
 
@@ -146,7 +145,7 @@ function Server:_BindPlayers()
     end
 
     for _, player in Players:GetPlayers() do
-        task.defer(PlayerAdded)(player)
+        task.defer(PlayerAdded, player)
     end
     Players.PlayerAdded:Connect(PlayerAdded)
     Players.PlayerRemoving:Connect(PlayerRemoving)
@@ -172,9 +171,33 @@ function Server:_BindMouseIcon()
 end
 
 function Server:_BindMouseTarget()
-    NetworkServer.Streamer.MouseTarget.On(function(player, basePart, size)
+    local function sizesAreClose(size1, size2, epsilon)
+        epsilon = epsilon or 1e-3
+        return (size1 - size2).Magnitude < epsilon
+    end
+
+    NetworkServer.Streamer.MouseTarget.On(function(player, basePart, clientSize)
+        local humanoid = basePart and basePart.Parent:FindFirstChildOfClass("Humanoid")
+        if not humanoid then return end
         
         -- check if hitbox expanding
+        if basePart then
+            local serverSize = basePart.Size
+            if not sizesAreClose(serverSize, clientSize) then
+                -- hbe
+                local diff = clientSize - serverSize
+
+                local ssOutput = string.format("(%.3f, %.3f, %.3f)", serverSize.X, serverSize.Y, serverSize.Z)
+                local csOutput = string.format("(%.3f, %.3f, %.3f)", clientSize.X, clientSize.Y, clientSize.Z)
+                local dfOutput = string.format("(%.3f, %.3f, %.3f)", diff.X, diff.Y, diff.Z)
+                local message = "Hit Expanded Part"
+                local details = string.format("serv: %s locl: %s diff: %s", ssOutput, csOutput, dfOutput)
+            end
+        else
+            local csOutput = string.format("(%.3f, %.3f, %.3f)", clientSize.X, clientSize.Y, clientSize.Z)
+            local message = "Hit Nonexisting Part"
+            local details = string.format("locl: %s", csOutput)
+        end
     end)
 end
 

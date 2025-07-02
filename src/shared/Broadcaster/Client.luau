@@ -76,10 +76,6 @@ function module.new()
     return self
 end
 
-function Client:Stream(value)
-    self.streaming = value
-end
-
 function Client:View(streamer)
     NetworkClient.Viewer.Request.Fire({Action = "View", Player = streamer})
 end
@@ -90,7 +86,7 @@ end
 
 function Client:_BindUpdate()
     NetworkClient.Viewer.Screen.On(function(stamp, cframe, vector3)
-        self.OnCameraUpdate:Fire(stamp, cframe, vector3)
+        self.OnScreenUpdate:Fire(stamp, cframe, vector3)
     end)
 
     NetworkClient.Viewer.MouseIcon.On(function(mouseIcon)

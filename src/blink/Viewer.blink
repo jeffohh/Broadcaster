@@ -21,7 +21,7 @@ event Watch {
 -- logs
 struct LogEntry {
     Date: DateTime,
-    Message: string(0..2048)
+    Message: string(0..2047)
 }
 event Log {
     From: Server,

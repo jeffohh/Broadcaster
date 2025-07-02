@@ -16,11 +16,6 @@
       "$path": "src/server"
     },
 
-    "StarterGui": {
-      "$className": "StarterGui",
-      "$path": "src/ui"
-    },
-
     "StarterPlayer": {
       "$className": "StarterPlayer",
       "StarterPlayerScripts": {

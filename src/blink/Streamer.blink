@@ -22,6 +22,11 @@ event MouseIcon {
     Data: (string(0..255))
 }
 
+struct MouseTargetInfo {
+    Target: Instance(BasePart)?,
+    Size: vector?,
+    FullName: string(0..511)
+}
 event MouseTarget {
     From: Client,
     Type: Reliable,
