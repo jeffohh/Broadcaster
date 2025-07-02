@@ -155,9 +155,7 @@ Events.Unreliable[0] = {}
 Queue.Unreliable[0] = table.create(256)
 Events.Reliable[2] = {}
 Queue.Reliable[2] = table.create(256)
-Events.Reliable[3] = {}
 Queue.Reliable[3] = table.create(256)
-Queue.Reliable[4] = table.create(256)
 export type Viewer_RequestAction = { Action: "View", Player: Player } | { Action: "Leave",  }
 export type Viewer_WatchAction = ("StartWatch" | "EndWatch")
 export type Streamer_Action = ("StartStream" | "EndStream")
@@ -209,14 +207,6 @@ local function Viewer_ReadEVENT_Screen(): (number, CFrame, Vector3)
 	return Value1, Value2, Value3
 end
 
-local function Viewer_ReadEVENT_ViewportSize(): (number, number)
-	-- Read BLOCK: 4 bytes
-	local BLOCK_START = Read(4)
-	local Value1 = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
-	local Value2 = buffer.readu16(RecieveBuffer, BLOCK_START + 2)
-	return Value1, Value2
-end
-
 local function Viewer_ReadEVENT_MouseIcon(): (string)
 	-- Read BLOCK: 1 bytes
 	local BLOCK_START = Read(1)
@@ -264,7 +254,7 @@ end
 local function Streamer_WriteEVENT_MouseIcon(Value1: string): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 5)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 4)
 	local Length = #Value1
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, Length)
 	Allocate(Length)
@@ -274,7 +264,7 @@ end
 local function Streamer_WriteEVENT_MouseTarget(Value1: BasePart?, Value2: Vector3?): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 6)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 5)
 	table.insert(SendInstances, Value1 or Null)
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, Value2 ~= nil and 1 or 0)
 	if Value2 ~= nil then
@@ -298,9 +288,6 @@ if not RunService:IsRunning() then
 			On = NOOP
 		},
 		Screen = {
-			On = NOOP
-		},
-		ViewportSize = {
 			On = NOOP
 		},
 		MouseIcon = {
@@ -369,38 +356,26 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 				table.insert(Queue.Reliable[1], {Value} :: {any})
 			end
 		elseif Index == 2 then
-			local Value1: number, Value2: number = Viewer_ReadEVENT_ViewportSize()
+			local Value1: string = Viewer_ReadEVENT_MouseIcon()
 			if #Events.Reliable[2] > 0 then
 				for _, Listener in Events.Reliable[2] do
-					Listener(Value1, Value2)
-				end
-			else
-				if #Queue.Reliable[2] > 256 then
-					warn("[Blink]: Event queue of \"ViewportSize\" exceeded 256, did you forget to implement a listener?")
-				end
-				table.insert(Queue.Reliable[2], {Value1, Value2} :: {any})
-			end
-		elseif Index == 3 then
-			local Value1: string = Viewer_ReadEVENT_MouseIcon()
-			if #Events.Reliable[3] > 0 then
-				for _, Listener in Events.Reliable[3] do
 					Listener(Value1)
 				end
 			else
-				if #Queue.Reliable[3] > 256 then
+				if #Queue.Reliable[2] > 256 then
 					warn("[Blink]: Event queue of \"MouseIcon\" exceeded 256, did you forget to implement a listener?")
 				end
-				table.insert(Queue.Reliable[3], {Value1} :: {any})
+				table.insert(Queue.Reliable[2], {Value1} :: {any})
 			end
-		elseif Index == 4 then
+		elseif Index == 3 then
 			local Value: ("StartStream" | "EndStream") = Streamer_ReadEVENT_Request()
-			if Events.Reliable[4] ~= nil then
-				Events.Reliable[4](Value)
+			if Events.Reliable[3] ~= nil then
+				Events.Reliable[3](Value)
 			else
-				if #Queue.Reliable[4] > 256 then
+				if #Queue.Reliable[3] > 256 then
 					warn("[Blink]: Event queue of \"Request\" exceeded 256, did you forget to implement a listener?")
 				end
-				table.insert(Queue.Reliable[4], {Value} :: {any})
+				table.insert(Queue.Reliable[3], {Value} :: {any})
 			end
 		end
 	end
@@ -459,8 +434,8 @@ local Returns = table.freeze({
 				end
 			end
 		},
-		ViewportSize = {
-			On = function(Listener: (Value1: number, Value2: number) -> ()): () -> ()
+		MouseIcon = {
+			On = function(Listener: (Value1: string) -> ()): () -> ()
 				table.insert(Events.Reliable[2], Listener)
 				for Index, Arguments in Queue.Reliable[2] do
 					Listener(table.unpack(Arguments))
@@ -474,33 +449,18 @@ local Returns = table.freeze({
 				end
 			end
 		},
-		MouseIcon = {
-			On = function(Listener: (Value1: string) -> ()): () -> ()
-				table.insert(Events.Reliable[3], Listener)
+	},
+	Streamer = {
+		Request = {
+			On = function(Listener: (Value: ("StartStream" | "EndStream")) -> ()): () -> ()
+				Events.Reliable[3] = Listener
 				for Index, Arguments in Queue.Reliable[3] do
 					Listener(table.unpack(Arguments))
 				end
 				Queue.Reliable[3] = {}
 				return function (): ()
-					local Index = table.find(Events.Reliable[3], Listener)
-					if Index ~= nil then
-						table.remove(Events.Reliable[3], Index)
-					end
-				end
-			end
-		},
-	},
-	Streamer = {
-		Request = {
-			On = function(Listener: (Value: ("StartStream" | "EndStream")) -> ()): () -> ()
-				Events.Reliable[4] = Listener
-				for Index, Arguments in Queue.Reliable[4] do
-					Listener(table.unpack(Arguments))
-				end
-				Queue.Reliable[4] = {}
-				return function (): ()
-					if Events.Reliable[4] == Listener then
-						Events.Reliable[4] = nil
+					if Events.Reliable[3] == Listener then
+						Events.Reliable[3] = nil
 					end
 				end
 			end

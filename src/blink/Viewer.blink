@@ -32,13 +32,6 @@ event Screen {
     Data: (f32, CFrame<f32, f32>, vector)
 }
 
-event ViewportSize {
-    From: Server,
-    Type: Reliable,
-    Call: ManySync,
-    Data: (u16, u16)
-}
-
 event MouseIcon {
     From: Server,
     Type: Reliable,
