@@ -3,7 +3,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local NetworkClient = require(script.Parent:WaitForChild("NetworkClient"))
-local NetworkTypes = require(script.Parent:WaitForChild("NetworkTypes"))
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 
@@ -19,7 +18,7 @@ type Impl = {
     _BindUpdate: (self: Client) -> (),
 
     _BindStream: (self: Client) -> (),
-    _BindCamera: (self: Client) -> (),
+    _BindScreen: (self: Client) -> (),
     _BindMouseIcon: (self: Client) -> (),
 }
 
@@ -27,10 +26,10 @@ type Proto = {
     streaming: boolean,
     watching: boolean,
 
-    OnWatchingChanged: LemonSignal.Signal<boolean>,
+    OnScreenUpdate: LemonSignal.Signal<number, CFrame, Vector3>,
+    OnMouseIconUpdate: LemonSignal.Signal<string>,
 
-    OnCameraUpdate: LemonSignal.Signal<number, CFrame, Vector3>,
-    OnMouseIconUpdate: LemonSignal.Signal<string>
+    OnWatchingChanged: LemonSignal.Signal<boolean>
 }
 
 local module = {}
@@ -60,12 +59,10 @@ function module.new()
     self.streaming = false -- camera + mouse
     self.watching = false
 
-    self.OnWatchingChanged = LemonSignal.new()
-
-    self.OnCameraUpdate = LemonSignal.new()
-    self.OnViewportUpdate = LemonSignal.new()
-    self.OnMouseUpdate = LemonSignal.new()
+    self.OnScreenUpdate = LemonSignal.new()
     self.OnMouseIconUpdate = LemonSignal.new()
+
+    self.OnWatchingChanged = LemonSignal.new()
 
     -- viewing
     self:_BindUpdate()
@@ -73,7 +70,7 @@ function module.new()
     -- streaming
     self:_BindStream()
 
-    self:_BindCamera()
+    self:_BindScreen()
     self:_BindMouseIcon()
 
     return self
@@ -121,10 +118,10 @@ function Client:_BindStream()
     end)
 end
 
-function Client:_BindCamera()
+function Client:_BindScreen()
     local target: BasePart? = nil
     local fpsLimit: number = 0
-    RunService:BindToRenderStep("StreamCamera", Enum.RenderPriority.Camera.Value + 1, function(delta)
+    RunService:BindToRenderStep("BindScreen", Enum.RenderPriority.Camera.Value + 1, function(delta)
         -- update mouse target and size
         if target ~= Mouse.Target then
             target = Mouse.Target

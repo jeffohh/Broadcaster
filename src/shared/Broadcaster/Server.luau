@@ -1,15 +1,12 @@
 --!strict
 --[[ Imports ]]--
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
 local NetworkServer = require(script.Parent:WaitForChild("NetworkServer"))
-local NetworkTypes = require(script.Parent:WaitForChild("NetworkTypes"))
 
 --[[ Header ]]--
 type Cached = {
+    ScreenStamp: number,
     Camera: CFrame,
-    CameraStamp: number,
-    
+    MousePosition: Vector3,
     MouseIcon: string
 }
 
@@ -19,11 +16,11 @@ type Impl = {
     View: (self: Server, viewer: Player, streamer: Player) -> (),
     Leave: (self: Server, viewer: Player) -> (),
 
-    BindPlayers: (self: Server) -> (),
+    _BindPlayers: (self: Server) -> (),
 
-    BindCamera: (self: Server) -> (),
-    BindMouseIcon: (self: Server) -> (),
-    BindMouseTarget: (self: Server) -> (),
+    _BindScreen: (self: Server) -> (),
+    _BindMouseIcon: (self: Server) -> (),
+    _BindMouseTarget: (self: Server) -> (),
 }
 
 type Proto = {
@@ -65,11 +62,11 @@ function module.new()
         end
     end)
 
-    self:BindPlayers()
+    self:_BindPlayers()
 
-    self:BindCamera()
-    self:BindMouseIcon()
-    self:BindMouseTarget()
+    self:_BindScreen()
+    self:_BindMouseIcon()
+    self:_BindMouseTarget()
 
     return self
 end
@@ -96,7 +93,7 @@ function Server:View(viewer, streamer)
 
     -- send snapshot of cached screen
     local cached = self.cache[streamer]
-    NetworkServer.Viewer.Screen.Fire(viewer, cached.CameraStamp, cached.Camera)
+    NetworkServer.Viewer.Screen.Fire(viewer, cached.CameraStamp, cached.Camera, cached.MousePosition)
     NetworkServer.Viewer.MouseIcon.Fire(viewer, cached.MouseIcon)
 end
 
@@ -121,9 +118,14 @@ function Server:Leave(viewer)
     NetworkServer.Viewer.Watch.Fire(viewer, "EndWatch")
 end
 
-function Server:BindPlayers()
+function Server:_BindPlayers()
     local function PlayerAdded(player: Player)
-        self.cache[player] = {}
+        self.cache[player] = {
+            ScreenStamp = 0,
+            Camera = CFrame.new(),
+            MousePosition = Vector3.zero,
+            MouseIcon = ""
+        }
         self.channels[player] = {}
     end
     local function PlayerRemoving(player: Player)
@@ -150,16 +152,17 @@ function Server:BindPlayers()
     Players.PlayerRemoving:Connect(PlayerRemoving)
 end
 
-function Server:BindCamera()
+function Server:_BindScreen()
     NetworkServer.Streamer.Screen.On(function(player, stamp, cframe, mousePos)
         self.cache[player].Camera = cframe
+        self.cache[player].MousePosition = mousePos
 
         local viewers = self.channels[player]
         NetworkServer.Viewer.Screen.FireList(viewers, stamp, cframe, mousePos)
     end)
 end
 
-function Server:BindMouseIcon()
+function Server:_BindMouseIcon()
     NetworkServer.Streamer.MouseIcon.On(function(player, mouseIcon)
         self.cache[player].MouseIcon = mouseIcon
 
@@ -168,8 +171,7 @@ function Server:BindMouseIcon()
     end)
 end
 
-
-function Server:BindMouseTarget()
+function Server:_BindMouseTarget()
     NetworkServer.Streamer.MouseTarget.On(function(player, basePart, size)
         -- check if hitbox expanding
     end)
