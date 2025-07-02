@@ -146,8 +146,9 @@ local Queue: any = {
     Unreliable = table.create(256)
 }
 
-export type Viewer_Action = { Action: "View", Player: Player } | { Action: "Leave",  }
-export type Streamer_Action = { Action: "SetStreaming", value: boolean } | { Action: "SetWatching", value: boolean }
+export type Viewer_RequestAction = { Action: "View", Player: Player } | { Action: "Leave",  }
+export type Viewer_WatchAction = ("StartWatch" | "EndWatch")
+export type Streamer_Action = ("StartStream" | "EndStream")
 
 
 

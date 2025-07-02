@@ -1,5 +1,5 @@
 
-enum Action = "Action" {
+enum RequestAction = "Action" {
     View {
         Player: Instance(Player)
     },
@@ -12,22 +12,24 @@ event Request {
     From: Client,
     Type: Reliable,
     Call: SingleSync,
-    Data: (Action[])
+    Data: RequestAction
+}
+
+enum WatchAction = { StartWatch, EndWatch }
+
+event Watch {
+    From: Server,
+    Type: Reliable,
+    Call: SingleSync,
+    Data: WatchAction
 }
 
 -- core camera
-event Camera {
+event Screen {
     From: Server,
     Type: Unreliable,
     Call: ManySync,
-    Data: (f32, CFrame<f32, f32>)
-}
-
-event MousePosition {
-    From: Server,
-    Type: Unreliable,
-    Call: ManySync,
-    Data: (f32, u16, u16)
+    Data: (f32, CFrame<f32, f32>, vector)
 }
 
 event ViewportSize {
@@ -42,11 +44,4 @@ event MouseIcon {
     Type: Reliable,
     Call: ManySync,
     Data: (string(0..255))
-}
-
-event MouseTarget {
-    From: Server,
-    Type: Reliable,
-    Call: ManySync,
-    Data: (Instance(BasePart)?, vector?)
 }

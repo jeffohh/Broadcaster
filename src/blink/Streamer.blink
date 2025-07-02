@@ -1,40 +1,19 @@
 
-enum Action = "Action" {
-    SetStreaming {
-        value: boolean
-    },
-    SetWatching {
-        value: boolean
-    }
-}
+enum Action = { StartStream, EndStream }
 
 event Request {
     From: Server,
     Type: Reliable,
     Call: SingleSync,
-    Data: (Action[])
+    Data: Action
 }
 
 -- core camera
-event Camera {
+event Screen {
     From: Client,
     Type: Unreliable,
     Call: SingleSync,
-    Data: (f32, CFrame<f32, f32>)
-}
-
-event MousePosition {
-    From: Client,
-    Type: Unreliable,
-    Call: SingleSync,
-    Data: (f32, u16, u16)
-}
-
-event ViewportSize {
-    From: Client,
-    Type: Reliable,
-    Call: SingleSync,
-    Data: (u16, u16)
+    Data: (f32, CFrame<f32, f32>, vector)
 }
 
 event MouseIcon {
