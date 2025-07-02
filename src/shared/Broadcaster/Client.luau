@@ -5,19 +5,32 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local NetworkClient = require(script.Parent:WaitForChild("NetworkClient"))
 local NetworkTypes = require(script.Parent:WaitForChild("NetworkTypes"))
 
+local Packages = ReplicatedStorage:WaitForChild("Packages")
+
+local LemonSignal = require(Packages:WaitForChild("lemonsignal"))
+
 --[[ Header ]]--
 type Impl = {
     __index: Impl,
 
-    BindCamera: (self: Client) -> (),
-    BindViewport: (self: Client) -> (),
-    BindMouse: (self: Client) -> (),
-    BindMouseIcon: (self: Client) -> (),
+    View: (self: Client, streamer: Player) -> (),
+    Leave: (self: Client) -> (),
+
+    _BindUpdate: (self: Client) -> (),
+
+    _BindStream: (self: Client) -> (),
+    _BindCamera: (self: Client) -> (),
+    _BindMouseIcon: (self: Client) -> (),
 }
 
 type Proto = {
     streaming: boolean,
-    watching: boolean
+    watching: boolean,
+
+    OnWatchingChanged: LemonSignal.Signal<boolean>,
+
+    OnCameraUpdate: LemonSignal.Signal<number, CFrame, Vector3>,
+    OnMouseIconUpdate: LemonSignal.Signal<string>
 }
 
 local module = {}
@@ -28,7 +41,7 @@ Client.__index = Client
 export type Client = typeof(setmetatable({} :: Proto, {} :: Impl))
 
 --[[ Globals ]]--
-local FPS_LIMIT = 1/60
+local FPS_LIMIT = 1/144
 
 --[[ Services ]]--
 local Players = game:GetService("Players")
@@ -44,76 +57,93 @@ local Camera = workspace.CurrentCamera
 function module.new()
     local self = setmetatable({} :: Proto, Client)
 
-    self.streaming = false
+    self.streaming = false -- camera + mouse
     self.watching = false
 
-    self:BindCamera()
-    self:BindViewport()
-    self:BindMouse()
-    self:BindMouseIcon()
+    self.OnWatchingChanged = LemonSignal.new()
+
+    self.OnCameraUpdate = LemonSignal.new()
+    self.OnViewportUpdate = LemonSignal.new()
+    self.OnMouseUpdate = LemonSignal.new()
+    self.OnMouseIconUpdate = LemonSignal.new()
+
+    -- viewing
+    self:_BindUpdate()
+
+    -- streaming
+    self:_BindStream()
+
+    self:_BindCamera()
+    self:_BindMouseIcon()
 
     return self
 end
 
-function Client:BindCamera()
+function Client:Stream(value)
+    self.streaming = value
+end
+
+function Client:View(streamer)
+    NetworkClient.Viewer.Request.Fire({Action = "View", Player = streamer})
+end
+
+function Client:Leave()
+    NetworkClient.Viewer.Request.Fire({Action = "Leave"})
+end
+
+function Client:_BindUpdate()
+    NetworkClient.Viewer.Screen.On(function(stamp, cframe, vector3)
+        self.OnCameraUpdate:Fire(stamp, cframe, vector3)
+    end)
+
+    NetworkClient.Viewer.MouseIcon.On(function(mouseIcon)
+        self.OnMouseIconUpdate:Fire(mouseIcon)
+    end)
+end
+
+function Client:_BindStream()
+    NetworkClient.Streamer.Request.On(function(request)
+        if request == "StartStream" then
+            self.streaming = true
+        elseif request == "EndStream" then
+            self.streaming = false
+        end
+    end)
+
+    NetworkClient.Viewer.Watch.On(function(request)
+        if request == "StartWatch" then
+            self.watching = true
+            self.OnWatchingChanged:Fire(self.watching)
+        elseif request == "EndWatch" then
+            self.watching = false
+            self.OnWatchingChanged:Fire(self.watching)
+        end
+    end)
+end
+
+function Client:_BindCamera()
     local target: BasePart? = nil
     local fpsLimit: number = 0
-    RunService:BindToRenderStep("StreamCamera", Enum.RenderPriority.Camera + 1, function(delta)
+    RunService:BindToRenderStep("StreamCamera", Enum.RenderPriority.Camera.Value + 1, function(delta)
         -- update mouse target and size
         if target ~= Mouse.Target then
             target = Mouse.Target
-            NetworkClient.Streamer.MouseTarget:Fire(target, target.Size)
+            NetworkClient.Streamer.MouseTarget.Fire(target, if target then target.Size else nil)
         end
+
+        if not self.streaming then return end
+        if not Camera then return end
 
         -- update camera
         fpsLimit += delta
-        if fpsLimit < 1/60 then return end
-        NetworkClient.Streamer.Camera.Fire(tick(), Camera.CFrame)
+        if fpsLimit < FPS_LIMIT then return end
+        NetworkClient.Streamer.Screen.Fire(time(), Camera.CFrame, Mouse.Hit.Position)
         fpsLimit = 0
     end)
 end
 
-function Client:BindViewport()
-    Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-        local viewport = Camera.ViewportSize
-        NetworkClient.Streamer.ViewportSize.Fire(viewport.X, viewport.Y)
-    end)
-end
-
-function Client:BindMouse()
-    local latestX = 0
-    local latestY = 0
-
-    local lastTick = tick()
-    local scheduled = false
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
-
-        local mousePos = input.Position
-        if mousePos.X == latestX and mousePos.Y == latestY then return end
-
-        latestX = mousePos.X
-        latestY = mousePos.Y
-
-        if scheduled then return end
-
-        local now = tick()
-        local delta = now - lastTick
-        if delta >= FPS_LIMIT then
-            lastTick = now
-            NetworkClient.Streamer.MousePosition.Fire(now, latestX, latestY)
-        else
-            scheduled = true
-            task.delay(FPS_LIMIT - delta, function()
-                lastTick = tick()
-                NetworkClient.Streamer.MousePosition.Fire(lastTick, latestX, latestY)
-                scheduled = false
-            end)
-        end
-    end)
-end
-
-function Client:BindMouseIcon()
+function Client:_BindMouseIcon()
+    NetworkClient.Streamer.MouseIcon.Fire(UserInputService.MouseIcon)
     UserInputService:GetPropertyChangedSignal("MouseIcon"):Connect(function()
         NetworkClient.Streamer.MouseIcon.Fire(UserInputService.MouseIcon)
     end)

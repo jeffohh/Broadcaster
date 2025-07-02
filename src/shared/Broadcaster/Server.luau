@@ -9,14 +9,7 @@ local NetworkTypes = require(script.Parent:WaitForChild("NetworkTypes"))
 type Cached = {
     Camera: CFrame,
     CameraStamp: number,
-
-    MouseX: number,
-    MouseY: number,
-    MouseStamp: number,
-
-    ViewportX: number,
-    ViewportY: number,
-
+    
     MouseIcon: string
 }
 
@@ -29,8 +22,7 @@ type Impl = {
     BindPlayers: (self: Server) -> (),
 
     BindCamera: (self: Server) -> (),
-    BindViewport: (self: Server) -> (),
-    BindMouse: (self: Server) -> (),
+    BindMouseIcon: (self: Server) -> (),
     BindMouseTarget: (self: Server) -> (),
 }
 
@@ -65,6 +57,7 @@ function module.new()
     self.viewers = {}
 
     NetworkServer.Viewer.Request.On(function(player, request)
+        print(player, request)
         if request.Action == "View" then
             self:View(player, request.Player)
         elseif request.Action == "Leave" then
@@ -75,8 +68,7 @@ function module.new()
     self:BindPlayers()
 
     self:BindCamera()
-    self:BindViewport()
-    self:BindMouse()
+    self:BindMouseIcon()
     self:BindMouseTarget()
 
     return self
@@ -99,10 +91,13 @@ function Server:View(viewer, streamer)
     -- watch new person
     table.insert(self.channels[streamer], viewer)
     self.viewers[viewer] = streamer
-    NetworkServer.Streamer.Request.Fire(streamer, "Online")
+    NetworkServer.Streamer.Request.Fire(streamer, "StartStream")
+    NetworkServer.Viewer.Watch.Fire(viewer, "StartWatch")
 
     -- send snapshot of cached screen
-    
+    local cached = self.cache[streamer]
+    NetworkServer.Viewer.Screen.Fire(viewer, cached.CameraStamp, cached.Camera)
+    NetworkServer.Viewer.MouseIcon.Fire(viewer, cached.MouseIcon)
 end
 
 function Server:Leave(viewer)
@@ -118,11 +113,12 @@ function Server:Leave(viewer)
             -- check viewer count, go offline if no viewers
             local viewerCount = #self.channels[streamer]
             if viewerCount == 0 then
-                NetworkServer.Streamer.Request.Fire(streamer, "Offline")
+                NetworkServer.Streamer.Request.Fire(streamer, "EndStream")
             end
         end
     end
     self.viewers[viewer] = nil
+    NetworkServer.Viewer.Watch.Fire(viewer, "EndWatch")
 end
 
 function Server:BindPlayers()
@@ -155,22 +151,20 @@ function Server:BindPlayers()
 end
 
 function Server:BindCamera()
-    NetworkServer.Streamer.Camera.On(function(player, stamp, cframe)
+    NetworkServer.Streamer.Screen.On(function(player, stamp, cframe, mousePos)
         self.cache[player].Camera = cframe
+
+        local viewers = self.channels[player]
+        NetworkServer.Viewer.Screen.FireList(viewers, stamp, cframe, mousePos)
     end)
 end
 
-function Server:BindViewport()
-    NetworkServer.Streamer.ViewportSize.On(function(player, viewportX, viewportY)
-        self.cache[player].ViewportX = viewportX
-        self.cache[player].ViewportY = viewportY
-    end)
-end
+function Server:BindMouseIcon()
+    NetworkServer.Streamer.MouseIcon.On(function(player, mouseIcon)
+        self.cache[player].MouseIcon = mouseIcon
 
-function Server:BindMouse()
-    NetworkServer.Streamer.MousePosition.On(function(player, stamp, mouseX, mouseY)
-        self.cache[player].MouseX = mouseX
-        self.cache[player].MouseY = mouseY
+        local viewers = self.channels[player]
+        NetworkServer.Viewer.MouseIcon.FireList(viewers, mouseIcon)
     end)
 end
 
