@@ -1,13 +1,8 @@
 
 enum RequestAction = "Action" {
-    View {
-        Player: Instance(Player)
-    },
-    Leave {
-
-    }
+    View { Player: Instance(Player) },
+    Leave { }
 }
-
 event Request {
     From: Client,
     Type: Reliable,
@@ -15,13 +10,24 @@ event Request {
     Data: RequestAction
 }
 
-enum WatchAction = { StartWatch, EndWatch }
-
+enum WatchAction = { Start, Stop }
 event Watch {
     From: Server,
     Type: Reliable,
     Call: SingleSync,
     Data: WatchAction
+}
+
+-- logs
+struct LogEntry {
+    Date: DateTime,
+    Message: string(0..2048)
+}
+event Log {
+    From: Server,
+    Type: Reliable,
+    Call: SingleAsync,
+    Data: LogEntry[]
 }
 
 -- core camera

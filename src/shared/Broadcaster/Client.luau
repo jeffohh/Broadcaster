@@ -100,18 +100,18 @@ end
 
 function Client:_BindStream()
     NetworkClient.Streamer.Request.On(function(request)
-        if request == "StartStream" then
+        if request == "Start" then
             self.streaming = true
-        elseif request == "EndStream" then
+        elseif request == "Stop" then
             self.streaming = false
         end
     end)
 
     NetworkClient.Viewer.Watch.On(function(request)
-        if request == "StartWatch" then
+        if request == "Start" then
             self.watching = true
             self.OnWatchingChanged:Fire(self.watching)
-        elseif request == "EndWatch" then
+        elseif request == "Stop" then
             self.watching = false
             self.OnWatchingChanged:Fire(self.watching)
         end

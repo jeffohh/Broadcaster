@@ -151,14 +151,16 @@ local Queue: any = {
 }
 
 Queue.Reliable[1] = table.create(256)
+Queue.Reliable[2] = table.create(256)
 Events.Unreliable[0] = {}
 Queue.Unreliable[0] = table.create(256)
-Events.Reliable[2] = {}
-Queue.Reliable[2] = table.create(256)
+Events.Reliable[3] = {}
 Queue.Reliable[3] = table.create(256)
+Queue.Reliable[4] = table.create(256)
 export type Viewer_RequestAction = { Action: "View", Player: Player } | { Action: "Leave",  }
-export type Viewer_WatchAction = ("StartWatch" | "EndWatch")
-export type Streamer_Action = ("StartStream" | "EndStream")
+export type Viewer_WatchAction = ("Start" | "Stop")
+export type Viewer_LogEntry = { Date: DateTime, Message: string }
+export type Streamer_Action = ("Start" | "Stop")
 local function Viewer_WriteEVENT_Request(Value: { Action: "View", Player: Player } | { Action: "Leave",  }): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
@@ -173,18 +175,47 @@ local function Viewer_WriteEVENT_Request(Value: { Action: "View", Player: Player
 	end
 end
 
-local function Viewer_ReadEVENT_Watch(): (("StartWatch" | "EndWatch"))
+local function Viewer_ReadEVENT_Watch(): (("Start" | "Stop"))
 	-- Read BLOCK: 1 bytes
 	local BLOCK_START = Read(1)
 	local Value = true :: any
 	local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
 	if Index == 0 then
-		Value = "StartWatch"
+		Value = "Start"
 	elseif Index == 1 then
-		Value = "EndWatch"
+		Value = "Stop"
 	else
 		error(`Unexpected enum: {Index}`)
 	end
+	return Value
+end
+
+local function Viewer_ReadEVENT_Log(): ({ { Date: DateTime, Message: string } })
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	-- START ARRAY
+	local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+	if Length < 0 then error(`Expected "Length" to be larger than 0, got {Length} instead.`) end
+	if Length > 65535 then error(`Expected "Length" to be smaller than 65535, got {Length} instead.`) end
+	local Value = table.create(Length)
+		-- Read BLOCK: 3 bytes
+	local ARRAY_START_1 = Read(3 * Length)
+	for Index = 1, Length do
+		local Item_1 = {} :: any
+		-- Read 1
+		local OPERATION_OFFSET_0 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		Item_1.Date = DateTime.fromUnixTimestamp(buffer.readf64(RecieveBuffer, OPERATION_OFFSET_0))
+		-- Read 2
+		local OPERATION_OFFSET_1 = ARRAY_START_1
+		ARRAY_START_1 += 2
+		Length = buffer.readu16(RecieveBuffer, OPERATION_OFFSET_1)
+		Item_1.Message = buffer.readstring(RecieveBuffer, Read(Length), Length)
+		if #Item_1.Message < 0 then error(`Expected length of "Item_1.Message" to be larger than 0, got {#Item_1.Message} instead.`) end
+		if #Item_1.Message > 2048 then error(`Expected length of "Item_1.Message" to be smaller than 2048, got {#Item_1.Message} instead.`) end
+		table.insert(Value, Item_1)
+	end
+	-- END ARRAY
 	return Value
 end
 
@@ -217,15 +248,15 @@ local function Viewer_ReadEVENT_MouseIcon(): (string)
 	return Value1
 end
 
-local function Streamer_ReadEVENT_Request(): (("StartStream" | "EndStream"))
+local function Streamer_ReadEVENT_Request(): (("Start" | "Stop"))
 	-- Read BLOCK: 1 bytes
 	local BLOCK_START = Read(1)
 	local Value = true :: any
 	local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
 	if Index == 0 then
-		Value = "StartStream"
+		Value = "Start"
 	elseif Index == 1 then
-		Value = "EndStream"
+		Value = "Stop"
 	else
 		error(`Unexpected enum: {Index}`)
 	end
@@ -254,7 +285,7 @@ end
 local function Streamer_WriteEVENT_MouseIcon(Value1: string): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 5)
 	local Length = #Value1
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, Length)
 	Allocate(Length)
@@ -264,7 +295,7 @@ end
 local function Streamer_WriteEVENT_MouseTarget(Value1: BasePart?, Value2: Vector3?): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 5)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 6)
 	table.insert(SendInstances, Value1 or Null)
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, Value2 ~= nil and 1 or 0)
 	if Value2 ~= nil then
@@ -285,6 +316,9 @@ if not RunService:IsRunning() then
 			Fire = NOOP
 		},
 		Watch = {
+			On = NOOP
+		},
+		Log = {
 			On = NOOP
 		},
 		Screen = {
@@ -346,7 +380,7 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
 		if Index == 1 then
-			local Value: ("StartWatch" | "EndWatch") = Viewer_ReadEVENT_Watch()
+			local Value: ("Start" | "Stop") = Viewer_ReadEVENT_Watch()
 			if Events.Reliable[1] ~= nil then
 				Events.Reliable[1](Value)
 			else
@@ -356,26 +390,36 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 				table.insert(Queue.Reliable[1], {Value} :: {any})
 			end
 		elseif Index == 2 then
+			local Value: { { Date: DateTime, Message: string } } = Viewer_ReadEVENT_Log()
+			if Events.Reliable[2] ~= nil then
+				task.spawn(Events.Reliable[2], Value)
+			else
+				if #Queue.Reliable[2] > 256 then
+					warn("[Blink]: Event queue of \"Log\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[2], {Value} :: {any})
+			end
+		elseif Index == 3 then
 			local Value1: string = Viewer_ReadEVENT_MouseIcon()
-			if #Events.Reliable[2] > 0 then
-				for _, Listener in Events.Reliable[2] do
+			if #Events.Reliable[3] > 0 then
+				for _, Listener in Events.Reliable[3] do
 					Listener(Value1)
 				end
 			else
-				if #Queue.Reliable[2] > 256 then
+				if #Queue.Reliable[3] > 256 then
 					warn("[Blink]: Event queue of \"MouseIcon\" exceeded 256, did you forget to implement a listener?")
 				end
-				table.insert(Queue.Reliable[2], {Value1} :: {any})
+				table.insert(Queue.Reliable[3], {Value1} :: {any})
 			end
-		elseif Index == 3 then
-			local Value: ("StartStream" | "EndStream") = Streamer_ReadEVENT_Request()
-			if Events.Reliable[3] ~= nil then
-				Events.Reliable[3](Value)
+		elseif Index == 4 then
+			local Value: ("Start" | "Stop") = Streamer_ReadEVENT_Request()
+			if Events.Reliable[4] ~= nil then
+				Events.Reliable[4](Value)
 			else
-				if #Queue.Reliable[3] > 256 then
+				if #Queue.Reliable[4] > 256 then
 					warn("[Blink]: Event queue of \"Request\" exceeded 256, did you forget to implement a listener?")
 				end
-				table.insert(Queue.Reliable[3], {Value} :: {any})
+				table.insert(Queue.Reliable[4], {Value} :: {any})
 			end
 		end
 	end
@@ -410,7 +454,7 @@ local Returns = table.freeze({
 			end
 		},
 		Watch = {
-			On = function(Listener: (Value: ("StartWatch" | "EndWatch")) -> ()): () -> ()
+			On = function(Listener: (Value: ("Start" | "Stop")) -> ()): () -> ()
 				Events.Reliable[1] = Listener
 				for Index, Arguments in Queue.Reliable[1] do
 					Listener(table.unpack(Arguments))
@@ -419,6 +463,20 @@ local Returns = table.freeze({
 				return function (): ()
 					if Events.Reliable[1] == Listener then
 						Events.Reliable[1] = nil
+					end
+				end
+			end
+		},
+		Log = {
+			On = function(Listener: (Value: { { Date: DateTime, Message: string } }) -> ()): () -> ()
+				Events.Reliable[2] = Listener
+				for Index, Arguments in Queue.Reliable[2] do
+					task.spawn(Listener, table.unpack(Arguments))
+				end
+				Queue.Reliable[2] = {}
+				return function (): ()
+					if Events.Reliable[2] == Listener then
+						Events.Reliable[2] = nil
 					end
 				end
 			end
@@ -436,15 +494,15 @@ local Returns = table.freeze({
 		},
 		MouseIcon = {
 			On = function(Listener: (Value1: string) -> ()): () -> ()
-				table.insert(Events.Reliable[2], Listener)
-				for Index, Arguments in Queue.Reliable[2] do
+				table.insert(Events.Reliable[3], Listener)
+				for Index, Arguments in Queue.Reliable[3] do
 					Listener(table.unpack(Arguments))
 				end
-				Queue.Reliable[2] = {}
+				Queue.Reliable[3] = {}
 				return function (): ()
-					local Index = table.find(Events.Reliable[2], Listener)
+					local Index = table.find(Events.Reliable[3], Listener)
 					if Index ~= nil then
-						table.remove(Events.Reliable[2], Index)
+						table.remove(Events.Reliable[3], Index)
 					end
 				end
 			end
@@ -452,15 +510,15 @@ local Returns = table.freeze({
 	},
 	Streamer = {
 		Request = {
-			On = function(Listener: (Value: ("StartStream" | "EndStream")) -> ()): () -> ()
-				Events.Reliable[3] = Listener
-				for Index, Arguments in Queue.Reliable[3] do
+			On = function(Listener: (Value: ("Start" | "Stop")) -> ()): () -> ()
+				Events.Reliable[4] = Listener
+				for Index, Arguments in Queue.Reliable[4] do
 					Listener(table.unpack(Arguments))
 				end
-				Queue.Reliable[3] = {}
+				Queue.Reliable[4] = {}
 				return function (): ()
-					if Events.Reliable[3] == Listener then
-						Events.Reliable[3] = nil
+					if Events.Reliable[4] == Listener then
+						Events.Reliable[4] = nil
 					end
 				end
 			end

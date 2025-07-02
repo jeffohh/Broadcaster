@@ -88,8 +88,8 @@ function Server:View(viewer, streamer)
     -- watch new person
     table.insert(self.channels[streamer], viewer)
     self.viewers[viewer] = streamer
-    NetworkServer.Streamer.Request.Fire(streamer, "StartStream")
-    NetworkServer.Viewer.Watch.Fire(viewer, "StartWatch")
+    NetworkServer.Streamer.Request.Fire(streamer, "Start")
+    NetworkServer.Viewer.Watch.Fire(viewer, "Start")
 
     -- send snapshot of cached screen
     local cached = self.cache[streamer]
@@ -110,12 +110,12 @@ function Server:Leave(viewer)
             -- check viewer count, go offline if no viewers
             local viewerCount = #self.channels[streamer]
             if viewerCount == 0 then
-                NetworkServer.Streamer.Request.Fire(streamer, "EndStream")
+                NetworkServer.Streamer.Request.Fire(streamer, "Stop")
             end
         end
     end
     self.viewers[viewer] = nil
-    NetworkServer.Viewer.Watch.Fire(viewer, "EndWatch")
+    NetworkServer.Viewer.Watch.Fire(viewer, "Stop")
 end
 
 function Server:_BindPlayers()
@@ -173,6 +173,7 @@ end
 
 function Server:_BindMouseTarget()
     NetworkServer.Streamer.MouseTarget.On(function(player, basePart, size)
+        
         -- check if hitbox expanding
     end)
 end

@@ -153,11 +153,12 @@ local Queue: any = {
 
 Queue.Reliable[0] = table.create(256)
 Queue.Unreliable[1] = table.create(256)
-Queue.Reliable[4] = table.create(256)
 Queue.Reliable[5] = table.create(256)
+Queue.Reliable[6] = table.create(256)
 export type Viewer_RequestAction = { Action: "View", Player: Player } | { Action: "Leave",  }
-export type Viewer_WatchAction = ("StartWatch" | "EndWatch")
-export type Streamer_Action = ("StartStream" | "EndStream")
+export type Viewer_WatchAction = ("Start" | "Stop")
+export type Viewer_LogEntry = { Date: DateTime, Message: string }
+export type Streamer_Action = ("Start" | "Stop")
 local function Viewer_ReadEVENT_Request(): ({ Action: "View", Player: Player } | { Action: "Leave",  })
 	-- Read BLOCK: 1 bytes
 	local BLOCK_START = Read(1)
@@ -179,17 +180,43 @@ local function Viewer_ReadEVENT_Request(): ({ Action: "View", Player: Player } |
 	return Value
 end
 
-local function Viewer_WriteEVENT_Watch(Value: ("StartWatch" | "EndWatch")): ()
+local function Viewer_WriteEVENT_Watch(Value: ("Start" | "Stop")): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 1)
-	if Value == "StartWatch" then
+	if Value == "Start" then
 		buffer.writeu8(SendBuffer, BLOCK_START + 1, 0)
-	elseif Value == "EndWatch" then
+	elseif Value == "Stop" then
 		buffer.writeu8(SendBuffer, BLOCK_START + 1, 1)
 	else
-		error(`Unexpected enum: {Value}, expected one of "StartWatch" or "EndWatch".`)
+		error(`Unexpected enum: {Value}, expected one of "Start" or "Stop".`)
 	end
+end
+
+local function Viewer_WriteEVENT_Log(Value: { { Date: DateTime, Message: string } }): ()
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 2)
+	-- START ARRAY
+	buffer.writeu16(SendBuffer, BLOCK_START + 1, #Value)
+		-- Allocate BLOCK: 10 bytes
+	local ARRAY_START_1 = Allocate(10 * #Value)
+	for Index = 1, #Value do
+		local Item_1 = Value[Index]
+		local DateTime = Item_1.Date
+		-- Allocate 8
+		local OPERATION_OFFSET_0 = ARRAY_START_1
+		ARRAY_START_1 += 8
+		buffer.writef64(SendBuffer, OPERATION_OFFSET_0, DateTime.UnixTimestamp)
+		local Length = #Item_1.Message
+		-- Allocate 2
+		local OPERATION_OFFSET_1 = ARRAY_START_1
+		ARRAY_START_1 += 2
+		buffer.writeu16(SendBuffer, OPERATION_OFFSET_1, Length)
+		Allocate(Length)
+		buffer.writestring(SendBuffer, SendOffset, Item_1.Message, Length)
+	end
+	-- END ARRAY
 end
 
 local function Viewer_WriteEVENT_Screen(Value1: number, Value2: CFrame, Value3: Vector3): ()
@@ -214,23 +241,23 @@ end
 local function Viewer_WriteEVENT_MouseIcon(Value1: string): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 2)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 3)
 	local Length = #Value1
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, Length)
 	Allocate(Length)
 	buffer.writestring(SendBuffer, SendOffset, Value1, Length)
 end
 
-local function Streamer_WriteEVENT_Request(Value: ("StartStream" | "EndStream")): ()
+local function Streamer_WriteEVENT_Request(Value: ("Start" | "Stop")): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 3)
-	if Value == "StartStream" then
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 4)
+	if Value == "Start" then
 		buffer.writeu8(SendBuffer, BLOCK_START + 1, 0)
-	elseif Value == "EndStream" then
+	elseif Value == "Stop" then
 		buffer.writeu8(SendBuffer, BLOCK_START + 1, 1)
 	else
-		error(`Unexpected enum: {Value}, expected one of "StartStream" or "EndStream".`)
+		error(`Unexpected enum: {Value}, expected one of "Start" or "Stop".`)
 	end
 end
 
@@ -295,6 +322,12 @@ if not RunService:IsRunning() then
 			On = NOOP
 		},
 		Watch = {
+			Fire = NOOP,
+			FireAll = NOOP,
+			FireList = NOOP,
+			FireExcept = NOOP
+		},
+		Log = {
 			Fire = NOOP,
 			FireAll = NOOP,
 			FireList = NOOP,
@@ -397,25 +430,25 @@ Reliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instance
 				end
 				table.insert(Queue.Reliable[0], {Player, Value} :: {any})
 			end
-		elseif Index == 4 then
-			local Value1: string = Streamer_ReadEVENT_MouseIcon()
-			if Events.Reliable[4] ~= nil then
-				Events.Reliable[4](Player, Value1)
-			else
-				if #Queue.Reliable[4] > 256 then
-					warn("[Blink]: Event queue of \"MouseIcon\" exceeded 256, did you forget to implement a listener?")
-				end
-				table.insert(Queue.Reliable[4], {Player, Value1} :: {any})
-			end
 		elseif Index == 5 then
-			local Value1: BasePart?, Value2: Vector3? = Streamer_ReadEVENT_MouseTarget()
+			local Value1: string = Streamer_ReadEVENT_MouseIcon()
 			if Events.Reliable[5] ~= nil then
-				Events.Reliable[5](Player, Value1, Value2)
+				Events.Reliable[5](Player, Value1)
 			else
 				if #Queue.Reliable[5] > 256 then
+					warn("[Blink]: Event queue of \"MouseIcon\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[5], {Player, Value1} :: {any})
+			end
+		elseif Index == 6 then
+			local Value1: BasePart?, Value2: Vector3? = Streamer_ReadEVENT_MouseTarget()
+			if Events.Reliable[6] ~= nil then
+				Events.Reliable[6](Player, Value1, Value2)
+			else
+				if #Queue.Reliable[6] > 256 then
 					warn("[Blink]: Event queue of \"MouseTarget\" exceeded 256, did you forget to implement a listener?")
 				end
-				table.insert(Queue.Reliable[5], {Player, Value1, Value2} :: {any})
+				table.insert(Queue.Reliable[6], {Player, Value1, Value2} :: {any})
 			end
 		end
 	end
@@ -459,12 +492,12 @@ local Returns = table.freeze({
 			end
 		},
 		Watch = {
-			Fire = function(Player: Player, Value: ("StartWatch" | "EndWatch")): ()
+			Fire = function(Player: Player, Value: ("Start" | "Stop")): ()
 				Load(PlayersMap[Player])
 				Viewer_WriteEVENT_Watch(Value)
 				PlayersMap[Player] = Save()
 			end,
-			FireAll = function(Value: ("StartWatch" | "EndWatch")): ()
+			FireAll = function(Value: ("Start" | "Stop")): ()
 				Load()
 				Viewer_WriteEVENT_Watch(Value)
 				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -476,7 +509,7 @@ local Returns = table.freeze({
 					PlayersMap[Player] = Save()
 				end
 			end,
-			FireList = function(List: {Player}, Value: ("StartWatch" | "EndWatch")): ()
+			FireList = function(List: {Player}, Value: ("Start" | "Stop")): ()
 				Load()
 				Viewer_WriteEVENT_Watch(Value)
 				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -488,9 +521,55 @@ local Returns = table.freeze({
 					PlayersMap[Player] = Save()
 				end
 			end,
-			FireExcept = function(Except: Player, Value: ("StartWatch" | "EndWatch")): ()
+			FireExcept = function(Except: Player, Value: ("Start" | "Stop")): ()
 				Load()
 				Viewer_WriteEVENT_Watch(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					if Player == Except then
+						continue
+					end
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+		},
+		Log = {
+			Fire = function(Player: Player, Value: { { Date: DateTime, Message: string } }): ()
+				Load(PlayersMap[Player])
+				Viewer_WriteEVENT_Log(Value)
+				PlayersMap[Player] = Save()
+			end,
+			FireAll = function(Value: { { Date: DateTime, Message: string } }): ()
+				Load()
+				Viewer_WriteEVENT_Log(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireList = function(List: {Player}, Value: { { Date: DateTime, Message: string } }): ()
+				Load()
+				Viewer_WriteEVENT_Log(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in List do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireExcept = function(Except: Player, Value: { { Date: DateTime, Message: string } }): ()
+				Load()
+				Viewer_WriteEVENT_Log(Value)
 				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
 				for _, Player in Players:GetPlayers() do
 					if Player == Except then
@@ -590,12 +669,12 @@ local Returns = table.freeze({
 	},
 	Streamer = {
 		Request = {
-			Fire = function(Player: Player, Value: ("StartStream" | "EndStream")): ()
+			Fire = function(Player: Player, Value: ("Start" | "Stop")): ()
 				Load(PlayersMap[Player])
 				Streamer_WriteEVENT_Request(Value)
 				PlayersMap[Player] = Save()
 			end,
-			FireAll = function(Value: ("StartStream" | "EndStream")): ()
+			FireAll = function(Value: ("Start" | "Stop")): ()
 				Load()
 				Streamer_WriteEVENT_Request(Value)
 				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -607,7 +686,7 @@ local Returns = table.freeze({
 					PlayersMap[Player] = Save()
 				end
 			end,
-			FireList = function(List: {Player}, Value: ("StartStream" | "EndStream")): ()
+			FireList = function(List: {Player}, Value: ("Start" | "Stop")): ()
 				Load()
 				Streamer_WriteEVENT_Request(Value)
 				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -619,7 +698,7 @@ local Returns = table.freeze({
 					PlayersMap[Player] = Save()
 				end
 			end,
-			FireExcept = function(Except: Player, Value: ("StartStream" | "EndStream")): ()
+			FireExcept = function(Except: Player, Value: ("Start" | "Stop")): ()
 				Load()
 				Streamer_WriteEVENT_Request(Value)
 				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -647,20 +726,6 @@ local Returns = table.freeze({
 		},
 		MouseIcon = {
 			On = function(Listener: (Player: Player, Value1: string) -> ()): () -> ()
-				Events.Reliable[4] = Listener
-				for Index, Arguments in Queue.Reliable[4] do
-					Listener(table.unpack(Arguments))
-				end
-				Queue.Reliable[4] = {}
-				return function (): ()
-					if Events.Reliable[4] == Listener then
-						Events.Reliable[4] = nil
-					end
-				end
-			end
-		},
-		MouseTarget = {
-			On = function(Listener: (Player: Player, Value1: BasePart?, Value2: Vector3?) -> ()): () -> ()
 				Events.Reliable[5] = Listener
 				for Index, Arguments in Queue.Reliable[5] do
 					Listener(table.unpack(Arguments))
@@ -669,6 +734,20 @@ local Returns = table.freeze({
 				return function (): ()
 					if Events.Reliable[5] == Listener then
 						Events.Reliable[5] = nil
+					end
+				end
+			end
+		},
+		MouseTarget = {
+			On = function(Listener: (Player: Player, Value1: BasePart?, Value2: Vector3?) -> ()): () -> ()
+				Events.Reliable[6] = Listener
+				for Index, Arguments in Queue.Reliable[6] do
+					Listener(table.unpack(Arguments))
+				end
+				Queue.Reliable[6] = {}
+				return function (): ()
+					if Events.Reliable[6] == Listener then
+						Events.Reliable[6] = nil
 					end
 				end
 			end

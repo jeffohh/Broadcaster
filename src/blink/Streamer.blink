@@ -1,6 +1,5 @@
 
-enum Action = { StartStream, EndStream }
-
+enum Action = { Start, Stop }
 event Request {
     From: Server,
     Type: Reliable,
