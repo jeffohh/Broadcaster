@@ -6,4 +6,3 @@ realm = "shared"
 
 [dependencies]
 lemonsignal = "data-oriented-house/lemonsignal@1.10.0"
-janitor = "howmanysmall/janitor@1.18.3"
