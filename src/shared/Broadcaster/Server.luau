@@ -1,6 +1,7 @@
 --!strict
 --[[ Imports ]]--
 local NetworkServer = require(script.Parent:WaitForChild("NetworkServer"))
+local NetworkTypes = require(script.Parent:WaitForChild("NetworkTypes"))
 
 --[[ Header ]]--
 type Cached = {
@@ -26,8 +27,9 @@ type Impl = {
 type Proto = {
     cache: {[Player]: Cached},
 
-    channels: {[Player]: {Player}},  -- streamer -> {viewers}
-    viewers: {[Player]: Player}       -- viewer -> streamer
+    channels: {[Player]: {Player}},         -- streamer -> {viewers}
+    viewers: {[Player]: Player},            -- viewer -> streamer
+    logs: {NetworkTypes.Viewer_LogEntry}
 }
 
 local module = {}
@@ -52,12 +54,15 @@ function module.new()
     self.cache = {}
     self.channels = {}
     self.viewers = {}
+    self.logs = {}
 
     NetworkServer.Viewer.Request.On(function(player, request)
         if request.Action == "View" then
             self:View(player, request.Player)
         elseif request.Action == "Leave" then
             self:Leave(player)
+        elseif request.Action == "Logs" then
+            NetworkServer.Viewer.Log.Fire(player, self.logs)
         end
     end)
 
@@ -171,15 +176,36 @@ function Server:_BindMouseIcon()
 end
 
 function Server:_BindMouseTarget()
-    local function sizesAreClose(size1, size2, epsilon)
+    local function sizesAreClose(size1: Vector3, size2: Vector3, epsilon: number): boolean
         epsilon = epsilon or 1e-3
         return (size1 - size2).Magnitude < epsilon
     end
 
-    NetworkServer.Streamer.MouseTarget.On(function(player, basePart, clientSize)
-        local humanoid = basePart and basePart.Parent:FindFirstChildOfClass("Humanoid")
-        if not humanoid then return end
+    local function createLog(title: string, message: string, details: string): NetworkTypes.Viewer_LogEntry
+        local s1 = string.format([[<font size="20"><b>%s</b></font>]], title)
+        local s2 = string.format([[<font size="16"><b>%s</b></font>]], message)
+        local s3 = string.format([[<font size="12"><b>%s</b></font>]], details)
+
+        local output = s1 .. "\n" .. s2 .. "\n" .. s3
+        local log: NetworkTypes.Viewer_LogEntry = { DateFormat = DateTime.now():FormatLocalTime("YYYY-MM-DD\nHH:mm:ss", "en-us"), Message = output }
+        table.insert(self.logs, log)
+        return log
+    end
+
+    local function createNameTag(player: Player): string
+        return "@" .. player.Name .. (if player.Name == player.DisplayName then "" else string.format(" (%s)", player.DisplayName))
+    end
+
+    NetworkServer.Streamer.MouseTarget.On(function(player, mouseTargetInfo)
+        local basePart = mouseTargetInfo.Target
         
+        local parent = mouseTargetInfo.Parent
+        local humanoid = parent and (parent:FindFirstChildOfClass("Humanoid") or parent.Parent:FindFirstChildOfClass("Humanoid"))
+        if not humanoid then return end
+
+        local clientSize = mouseTargetInfo.Size
+        local fullName = mouseTargetInfo.FullName
+
         -- check if hitbox expanding
         if basePart then
             local serverSize = basePart.Size
@@ -187,16 +213,42 @@ function Server:_BindMouseTarget()
                 -- hbe
                 local diff = clientSize - serverSize
 
-                local ssOutput = string.format("(%.3f, %.3f, %.3f)", serverSize.X, serverSize.Y, serverSize.Z)
-                local csOutput = string.format("(%.3f, %.3f, %.3f)", clientSize.X, clientSize.Y, clientSize.Z)
-                local dfOutput = string.format("(%.3f, %.3f, %.3f)", diff.X, diff.Y, diff.Z)
-                local message = "Hit Expanded Part"
-                local details = string.format("serv: %s locl: %s diff: %s", ssOutput, csOutput, dfOutput)
+                local csOutput = string.format("[%.3f, %.3f, %.3f]", clientSize.X, clientSize.Y, clientSize.Z)
+                local ssOutput = string.format("[%.3f, %.3f, %.3f]", serverSize.X, serverSize.Y, serverSize.Z)
+                local dfOutput = string.format("[%.3f, %.3f, %.3f]", diff.X, diff.Y, diff.Z)
+
+                local loclTag = [[<mark color="rgb(255, 255, 100)" transparency="0.75">locl:</mark>]]
+                local servTag = [[<mark color="rgb(100, 255, 100)" transparency="0.75">serv:</mark>]]
+                local diffTag = [[<mark color="rgb(255, 100, 100)" transparency="0.75">diff:</mark>]]
+                local pathTag = [[<mark color="rgb(0, 0, 0)" transparency="0">path:</mark>]]
+
+                local title = "Hit Expanded Part"
+                local message = createNameTag(player) .. " has mismatched part sizes."
+                local details = string.format("%s %s - %s %s = %s %s\t|\t%s %s",
+                                                loclTag, csOutput,
+                                                servTag, ssOutput,
+                                                diffTag, dfOutput,
+                                                pathTag, fullName
+                                            )
+
+                local log = createLog(title, message, details)
+                NetworkServer.Viewer.Log.FireAll({log} :: {NetworkTypes.Viewer_LogEntry})
             end
         else
-            local csOutput = string.format("(%.3f, %.3f, %.3f)", clientSize.X, clientSize.Y, clientSize.Z)
-            local message = "Hit Nonexisting Part"
-            local details = string.format("locl: %s", csOutput)
+            local csOutput = string.format("[%.3f, %.3f, %.3f]", clientSize.X, clientSize.Y, clientSize.Z)
+
+            local loclTag = [[<mark color="rgb(255, 255, 100)" transparency="0.75">locl:</mark>]]
+            local pathTag = [[<mark color="rgb(0, 0, 0)" transparency="0">path:</mark>]]
+
+            local title = "Hit Nonexisting Part"
+            local message = createNameTag(player) .. " has hit nonexisting part."
+            local details = string.format("%s %s\t|\t%s %s",
+                                            loclTag, csOutput,
+                                            pathTag, fullName
+                                        )
+
+            local log = createLog(title, message, details)
+            NetworkServer.Viewer.Log.FireAll({log})
         end
     end)
 end

@@ -146,10 +146,11 @@ local Queue: any = {
     Unreliable = table.create(256)
 }
 
-export type Viewer_RequestAction = { Action: "View", Player: Player } | { Action: "Leave",  }
+export type Viewer_RequestAction = { Action: "View", Player: Player } | { Action: "Leave",  } | { Action: "Logs",  }
 export type Viewer_WatchAction = ("Start" | "Stop")
-export type Viewer_LogEntry = { Date: DateTime, Message: string }
+export type Viewer_LogEntry = { DateFormat: string, Message: string }
 export type Streamer_Action = ("Start" | "Stop")
+export type Streamer_MouseTargetInfo = { Target: BasePart?, Parent: Instance?, Size: Vector3?, FullName: string? }
 
 
 

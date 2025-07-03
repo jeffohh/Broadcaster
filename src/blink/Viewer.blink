@@ -1,7 +1,8 @@
 
 enum RequestAction = "Action" {
     View { Player: Instance(Player) },
-    Leave { }
+    Leave { },
+    Logs { }
 }
 event Request {
     From: Client,
@@ -20,8 +21,8 @@ event Watch {
 
 -- logs
 struct LogEntry {
-    Date: DateTime,
-    Message: string(0..2047)
+    DateFormat: string(19),
+    Message: string(0..2048)
 }
 event Log {
     From: Server,
@@ -42,5 +43,5 @@ event MouseIcon {
     From: Server,
     Type: Reliable,
     Call: ManySync,
-    Data: (string(0..255))
+    Data: (string(0..256))
 }

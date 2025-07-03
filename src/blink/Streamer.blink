@@ -19,17 +19,18 @@ event MouseIcon {
     From: Client,
     Type: Reliable,
     Call: SingleSync,
-    Data: (string(0..255))
+    Data: (string(0..256))
 }
 
 struct MouseTargetInfo {
     Target: Instance(BasePart)?,
+    Parent: Instance?,
     Size: vector?,
-    FullName: string(0..511)
+    FullName: string(0..512)?
 }
 event MouseTarget {
     From: Client,
     Type: Reliable,
     Call: SingleSync,
-    Data: (Instance(BasePart)?, vector?)
+    Data: MouseTargetInfo
 }

@@ -155,11 +155,12 @@ Queue.Reliable[0] = table.create(256)
 Queue.Unreliable[1] = table.create(256)
 Queue.Reliable[5] = table.create(256)
 Queue.Reliable[6] = table.create(256)
-export type Viewer_RequestAction = { Action: "View", Player: Player } | { Action: "Leave",  }
+export type Viewer_RequestAction = { Action: "View", Player: Player } | { Action: "Leave",  } | { Action: "Logs",  }
 export type Viewer_WatchAction = ("Start" | "Stop")
-export type Viewer_LogEntry = { Date: DateTime, Message: string }
+export type Viewer_LogEntry = { DateFormat: string, Message: string }
 export type Streamer_Action = ("Start" | "Stop")
-local function Viewer_ReadEVENT_Request(): ({ Action: "View", Player: Player } | { Action: "Leave",  })
+export type Streamer_MouseTargetInfo = { Target: BasePart?, Parent: Instance?, Size: Vector3?, FullName: string? }
+local function Viewer_ReadEVENT_Request(): ({ Action: "View", Player: Player } | { Action: "Leave",  } | { Action: "Logs",  })
 	-- Read BLOCK: 1 bytes
 	local BLOCK_START = Read(1)
 	local Tag = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
@@ -174,6 +175,9 @@ local function Viewer_ReadEVENT_Request(): ({ Action: "View", Player: Player } |
 	elseif Tag == 1 then
 		Value = {} :: any
 		Value.Action = "Leave"
+	elseif Tag == 2 then
+		Value = {} :: any
+		Value.Action = "Logs"
 	else
 		error(`Unexpected variant: {Tag}`)
 	end
@@ -193,21 +197,20 @@ local function Viewer_WriteEVENT_Watch(Value: ("Start" | "Stop")): ()
 	end
 end
 
-local function Viewer_WriteEVENT_Log(Value: { { Date: DateTime, Message: string } }): ()
+local function Viewer_WriteEVENT_Log(Value: { { DateFormat: string, Message: string } }): ()
 	-- Allocate BLOCK: 3 bytes
 	local BLOCK_START = Allocate(3)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 2)
 	-- START ARRAY
 	buffer.writeu16(SendBuffer, BLOCK_START + 1, #Value)
-		-- Allocate BLOCK: 10 bytes
-	local ARRAY_START_1 = Allocate(10 * #Value)
+		-- Allocate BLOCK: 21 bytes
+	local ARRAY_START_1 = Allocate(21 * #Value)
 	for Index = 1, #Value do
 		local Item_1 = Value[Index]
-		local DateTime = Item_1.Date
-		-- Allocate 8
+		-- Allocate 19
 		local OPERATION_OFFSET_0 = ARRAY_START_1
-		ARRAY_START_1 += 8
-		buffer.writef64(SendBuffer, OPERATION_OFFSET_0, DateTime.UnixTimestamp)
+		ARRAY_START_1 += 19
+		buffer.writestring(SendBuffer, OPERATION_OFFSET_0, Item_1.DateFormat, 19)
 		local Length = #Item_1.Message
 		-- Allocate 2
 		local OPERATION_OFFSET_1 = ARRAY_START_1
@@ -239,11 +242,11 @@ local function Viewer_WriteEVENT_Screen(Value1: number, Value2: CFrame, Value3: 
 end
 
 local function Viewer_WriteEVENT_MouseIcon(Value1: string): ()
-	-- Allocate BLOCK: 2 bytes
-	local BLOCK_START = Allocate(2)
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 3)
 	local Length = #Value1
-	buffer.writeu8(SendBuffer, BLOCK_START + 1, Length)
+	buffer.writeu16(SendBuffer, BLOCK_START + 1, Length)
 	Allocate(Length)
 	buffer.writestring(SendBuffer, SendOffset, Value1, Length)
 end
@@ -281,37 +284,52 @@ local function Streamer_ReadEVENT_Screen(): (number, CFrame, Vector3)
 end
 
 local function Streamer_ReadEVENT_MouseIcon(): (string)
-	-- Read BLOCK: 1 bytes
-	local BLOCK_START = Read(1)
-	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
 	local Value1 = buffer.readstring(RecieveBuffer, Read(Length), Length)
 	if #Value1 < 0 then error(`Expected length of "Value1" to be larger than 0, got {#Value1} instead.`) end
-	if #Value1 > 255 then error(`Expected length of "Value1" to be smaller than 255, got {#Value1} instead.`) end
+	if #Value1 > 256 then error(`Expected length of "Value1" to be smaller than 256, got {#Value1} instead.`) end
 	return Value1
 end
 
-local function Streamer_ReadEVENT_MouseTarget(): (BasePart?, Vector3?)
-	-- Read BLOCK: 1 bytes
-	local BLOCK_START = Read(1)
-	local Value1
+local function Streamer_ReadEVENT_MouseTarget(): ({ Target: BasePart?, Parent: Instance?, Size: Vector3?, FullName: string? })
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Value = {} :: any
 	RecieveInstanceCursor += 1
 	if typeof(RecieveInstances[RecieveInstanceCursor]) == "Instance" then
 		RecieveInstanceCursor -= 1
 		RecieveInstanceCursor += 1
-		Value1 = RecieveInstances[RecieveInstanceCursor]
-		if typeof(Value1) ~= "Instance" then error(`Expected an Instance, got {typeof(Value1)} instead.`) end
-		if not Value1:IsA("BasePart") then error(`Expected an Instance of type "BasePart", got "{Value1.ClassName}" instead.`) end
+		Value.Target = RecieveInstances[RecieveInstanceCursor]
+		if typeof(Value.Target) ~= "Instance" then error(`Expected an Instance, got {typeof(Value.Target)} instead.`) end
+		if not Value.Target:IsA("BasePart") then error(`Expected an Instance of type "BasePart", got "{Value.Target.ClassName}" instead.`) end
 	end
-	local Value2
+	RecieveInstanceCursor += 1
+	if typeof(RecieveInstances[RecieveInstanceCursor]) == "Instance" then
+		RecieveInstanceCursor -= 1
+		RecieveInstanceCursor += 1
+		Value.Parent = RecieveInstances[RecieveInstanceCursor]
+		if typeof(Value.Parent) ~= "Instance" then error(`Expected an Instance, got {typeof(Value.Parent)} instead.`) end
+		if not Value.Parent:IsA("Instance") then error(`Expected an Instance of type "Instance", got "{Value.Parent.ClassName}" instead.`) end
+	end
 	if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
 		-- Read BLOCK: 12 bytes
 		local BLOCK_START = Read(12)
 		local X = buffer.readf32(RecieveBuffer, BLOCK_START + 0)
 		local Y = buffer.readf32(RecieveBuffer, BLOCK_START + 4)
 		local Z = buffer.readf32(RecieveBuffer, BLOCK_START + 8)
-		Value2 = Vector3.new(X, Y, Z)
+		Value.Size = Vector3.new(X, Y, Z)
 	end
-	return Value1, Value2
+	if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
+		-- Read BLOCK: 2 bytes
+		local BLOCK_START = Read(2)
+		local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+		Value.FullName = buffer.readstring(RecieveBuffer, Read(Length), Length)
+		if #Value.FullName < 0 then error(`Expected length of "Value.FullName" to be larger than 0, got {#Value.FullName} instead.`) end
+		if #Value.FullName > 512 then error(`Expected length of "Value.FullName" to be smaller than 512, got {#Value.FullName} instead.`) end
+	end
+	return Value
 end
 
 if not RunService:IsRunning() then
@@ -421,7 +439,7 @@ Reliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instance
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
 		if Index == 0 then
-			local Value: { Action: "View", Player: Player } | { Action: "Leave",  } = Viewer_ReadEVENT_Request()
+			local Value: { Action: "View", Player: Player } | { Action: "Leave",  } | { Action: "Logs",  } = Viewer_ReadEVENT_Request()
 			if Events.Reliable[0] ~= nil then
 				Events.Reliable[0](Player, Value)
 			else
@@ -441,14 +459,14 @@ Reliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instance
 				table.insert(Queue.Reliable[5], {Player, Value1} :: {any})
 			end
 		elseif Index == 6 then
-			local Value1: BasePart?, Value2: Vector3? = Streamer_ReadEVENT_MouseTarget()
+			local Value: { Target: BasePart?, Parent: Instance?, Size: Vector3?, FullName: string? } = Streamer_ReadEVENT_MouseTarget()
 			if Events.Reliable[6] ~= nil then
-				Events.Reliable[6](Player, Value1, Value2)
+				Events.Reliable[6](Player, Value)
 			else
 				if #Queue.Reliable[6] > 256 then
 					warn("[Blink]: Event queue of \"MouseTarget\" exceeded 256, did you forget to implement a listener?")
 				end
-				table.insert(Queue.Reliable[6], {Player, Value1, Value2} :: {any})
+				table.insert(Queue.Reliable[6], {Player, Value} :: {any})
 			end
 		end
 	end
@@ -478,7 +496,7 @@ local Returns = table.freeze({
 
 	Viewer = {
 		Request = {
-			On = function(Listener: (Player: Player, Value: { Action: "View", Player: Player } | { Action: "Leave",  }) -> ()): () -> ()
+			On = function(Listener: (Player: Player, Value: { Action: "View", Player: Player } | { Action: "Leave",  } | { Action: "Logs",  }) -> ()): () -> ()
 				Events.Reliable[0] = Listener
 				for Index, Arguments in Queue.Reliable[0] do
 					Listener(table.unpack(Arguments))
@@ -538,12 +556,12 @@ local Returns = table.freeze({
 			end,
 		},
 		Log = {
-			Fire = function(Player: Player, Value: { { Date: DateTime, Message: string } }): ()
+			Fire = function(Player: Player, Value: { { DateFormat: string, Message: string } }): ()
 				Load(PlayersMap[Player])
 				Viewer_WriteEVENT_Log(Value)
 				PlayersMap[Player] = Save()
 			end,
-			FireAll = function(Value: { { Date: DateTime, Message: string } }): ()
+			FireAll = function(Value: { { DateFormat: string, Message: string } }): ()
 				Load()
 				Viewer_WriteEVENT_Log(Value)
 				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -555,7 +573,7 @@ local Returns = table.freeze({
 					PlayersMap[Player] = Save()
 				end
 			end,
-			FireList = function(List: {Player}, Value: { { Date: DateTime, Message: string } }): ()
+			FireList = function(List: {Player}, Value: { { DateFormat: string, Message: string } }): ()
 				Load()
 				Viewer_WriteEVENT_Log(Value)
 				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -567,7 +585,7 @@ local Returns = table.freeze({
 					PlayersMap[Player] = Save()
 				end
 			end,
-			FireExcept = function(Except: Player, Value: { { Date: DateTime, Message: string } }): ()
+			FireExcept = function(Except: Player, Value: { { DateFormat: string, Message: string } }): ()
 				Load()
 				Viewer_WriteEVENT_Log(Value)
 				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -739,7 +757,7 @@ local Returns = table.freeze({
 			end
 		},
 		MouseTarget = {
-			On = function(Listener: (Player: Player, Value1: BasePart?, Value2: Vector3?) -> ()): () -> ()
+			On = function(Listener: (Player: Player, Value: { Target: BasePart?, Parent: Instance?, Size: Vector3?, FullName: string? }) -> ()): () -> ()
 				Events.Reliable[6] = Listener
 				for Index, Arguments in Queue.Reliable[6] do
 					Listener(table.unpack(Arguments))

@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local NetworkClient = require(script.Parent:WaitForChild("NetworkClient"))
+local NetworkTypes = require(script.Parent:WaitForChild("NetworkTypes"))
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 
@@ -14,6 +15,7 @@ type Impl = {
 
     View: (self: Client, streamer: Player) -> (),
     Leave: (self: Client) -> (),
+    Logs: (self: Client) -> (),
 
     _BindUpdate: (self: Client) -> (),
 
@@ -29,7 +31,9 @@ type Proto = {
     OnScreenUpdate: LemonSignal.Signal<number, CFrame, Vector3>,
     OnMouseIconUpdate: LemonSignal.Signal<string>,
 
-    OnWatchingChanged: LemonSignal.Signal<boolean>
+    OnWatchingChanged: LemonSignal.Signal<boolean>,
+
+    OnLogEntry: LemonSignal.Signal<{NetworkTypes.Viewer_LogEntry}>
 }
 
 local module = {}
@@ -64,12 +68,13 @@ function module.new()
 
     self.OnWatchingChanged = LemonSignal.new()
 
+    self.OnLogEntry = LemonSignal.new()
+
     -- viewing
     self:_BindUpdate()
 
     -- streaming
     self:_BindStream()
-
     self:_BindScreen()
     self:_BindMouseIcon()
 
@@ -84,6 +89,10 @@ function Client:Leave()
     NetworkClient.Viewer.Request.Fire({Action = "Leave"})
 end
 
+function Client:Logs()
+    NetworkClient.Viewer.Request.Fire({Action = "Logs"})
+end
+
 function Client:_BindUpdate()
     NetworkClient.Viewer.Screen.On(function(stamp, cframe, vector3)
         self.OnScreenUpdate:Fire(stamp, cframe, vector3)
@@ -91,6 +100,10 @@ function Client:_BindUpdate()
 
     NetworkClient.Viewer.MouseIcon.On(function(mouseIcon)
         self.OnMouseIconUpdate:Fire(mouseIcon)
+    end)
+
+    NetworkClient.Viewer.Log.On(function(logEntries)
+        self.OnLogEntry:Fire(logEntries)
     end)
 end
 
@@ -121,7 +134,12 @@ function Client:_BindScreen()
         -- update mouse target and size
         if target ~= Mouse.Target then
             target = Mouse.Target
-            NetworkClient.Streamer.MouseTarget.Fire(target, if target then target.Size else nil)
+            NetworkClient.Streamer.MouseTarget.Fire({
+                Target = target,
+                Parent = if target then target.Parent else nil,
+                Size = if target then target.Size else nil,
+                FullName = if target then target:GetFullName() else nil
+            })
         end
 
         if not self.streaming then return end
