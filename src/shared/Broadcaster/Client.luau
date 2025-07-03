@@ -134,12 +134,19 @@ function Client:_BindScreen()
         -- update mouse target and size
         if target ~= Mouse.Target then
             target = Mouse.Target
-            NetworkClient.Streamer.MouseTarget.Fire({
-                Target = target,
-                Parent = if target then target.Parent else nil,
-                Size = if target then target.Size else nil,
-                FullName = if target then target:GetFullName() else nil
-            })
+            if target then
+                NetworkClient.Streamer.MouseTarget.Fire({
+                    Info = "Valid",
+                    Target = target,
+                    Parent = target.Parent,
+                    Size = target.Size,
+                    FullName = target:GetFullName()
+                })
+            else
+                NetworkClient.Streamer.MouseTarget.Fire({
+                    Info = "None"
+                })
+            end
         end
 
         if not self.streaming then return end

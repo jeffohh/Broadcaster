@@ -150,7 +150,7 @@ export type Viewer_RequestAction = { Action: "View", Player: Player } | { Action
 export type Viewer_WatchAction = ("Start" | "Stop")
 export type Viewer_LogEntry = { DateFormat: string, Message: string }
 export type Streamer_Action = ("Start" | "Stop")
-export type Streamer_MouseTargetInfo = { Target: BasePart?, Parent: Instance?, Size: Vector3?, FullName: string? }
+export type Streamer_MouseTargetInfo = { Info: "Valid", Target: BasePart?, Parent: Instance?, Size: Vector3, FullName: string } | { Info: "None",  }
 
 
 

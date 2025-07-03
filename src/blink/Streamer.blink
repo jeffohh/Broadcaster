@@ -22,11 +22,14 @@ event MouseIcon {
     Data: (string(0..256))
 }
 
-struct MouseTargetInfo {
-    Target: Instance(BasePart)?,
-    Parent: Instance?,
-    Size: vector?,
-    FullName: string(0..512)?
+enum MouseTargetInfo = "Info" {
+    Valid {
+        Target: Instance(BasePart)?,
+        Parent: Instance?,
+        Size: vector,
+        FullName: string(0..512)
+    },
+    None { }
 }
 event MouseTarget {
     From: Client,

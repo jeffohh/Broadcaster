@@ -197,10 +197,12 @@ function Server:_BindMouseTarget()
     end
 
     NetworkServer.Streamer.MouseTarget.On(function(player, mouseTargetInfo)
+        if mouseTargetInfo.Info == "None" then return end
+
         local basePart = mouseTargetInfo.Target
-        
         local parent = mouseTargetInfo.Parent
-        local humanoid = parent and (parent:FindFirstChildOfClass("Humanoid") or parent.Parent:FindFirstChildOfClass("Humanoid"))
+
+        local humanoid = parent and (parent:FindFirstChildOfClass("Humanoid") or if parent.Parent then parent.Parent:FindFirstChildOfClass("Humanoid") else nil)
         if not humanoid then return end
 
         local clientSize = mouseTargetInfo.Size
@@ -209,7 +211,7 @@ function Server:_BindMouseTarget()
         -- check if hitbox expanding
         if basePart then
             local serverSize = basePart.Size
-            if not sizesAreClose(serverSize, clientSize) then
+            if not sizesAreClose(serverSize, clientSize, 1e-3) then
                 -- hbe
                 local diff = clientSize - serverSize
 
@@ -232,7 +234,7 @@ function Server:_BindMouseTarget()
                                             )
 
                 local log = createLog(title, message, details)
-                NetworkServer.Viewer.Log.FireAll({log} :: {NetworkTypes.Viewer_LogEntry})
+                NetworkServer.Viewer.Log.FireAll({log})
             end
         else
             local csOutput = string.format("[%.3f, %.3f, %.3f]", clientSize.X, clientSize.Y, clientSize.Z)

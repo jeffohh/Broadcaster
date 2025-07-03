@@ -161,7 +161,7 @@ export type Viewer_RequestAction = { Action: "View", Player: Player } | { Action
 export type Viewer_WatchAction = ("Start" | "Stop")
 export type Viewer_LogEntry = { DateFormat: string, Message: string }
 export type Streamer_Action = ("Start" | "Stop")
-export type Streamer_MouseTargetInfo = { Target: BasePart?, Parent: Instance?, Size: Vector3?, FullName: string? }
+export type Streamer_MouseTargetInfo = { Info: "Valid", Target: BasePart?, Parent: Instance?, Size: Vector3, FullName: string } | { Info: "None",  }
 local function Viewer_WriteEVENT_Request(Value: { Action: "View", Player: Player } | { Action: "Leave",  } | { Action: "Logs",  }): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
@@ -296,29 +296,28 @@ local function Streamer_WriteEVENT_MouseIcon(Value1: string): ()
 	buffer.writestring(SendBuffer, SendOffset, Value1, Length)
 end
 
-local function Streamer_WriteEVENT_MouseTarget(Value: { Target: BasePart?, Parent: Instance?, Size: Vector3?, FullName: string? }): ()
-	-- Allocate BLOCK: 3 bytes
-	local BLOCK_START = Allocate(3)
+local function Streamer_WriteEVENT_MouseTarget(Value: { Info: "Valid", Target: BasePart?, Parent: Instance?, Size: Vector3, FullName: string } | { Info: "None",  }): ()
+	-- Allocate BLOCK: 2 bytes
+	local BLOCK_START = Allocate(2)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 6)
-	table.insert(SendInstances, Value.Target or Null)
-	table.insert(SendInstances, Value.Parent or Null)
-	buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.Size ~= nil and 1 or 0)
-	if Value.Size ~= nil then
-		-- Allocate BLOCK: 12 bytes
-		local BLOCK_START = Allocate(12)
+	if Value.Info == "Valid" then
+		buffer.writeu8(SendBuffer, BLOCK_START + 1, 0)
+		-- Allocate BLOCK: 14 bytes
+		local BLOCK_START = Allocate(14)
+		table.insert(SendInstances, Value.Target or Null)
+		table.insert(SendInstances, Value.Parent or Null)
 		local Vector = Value.Size
 		buffer.writef32(SendBuffer, BLOCK_START + 0, Vector.X)
 		buffer.writef32(SendBuffer, BLOCK_START + 4, Vector.Y)
 		buffer.writef32(SendBuffer, BLOCK_START + 8, Vector.Z)
-	end
-	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.FullName ~= nil and 1 or 0)
-	if Value.FullName ~= nil then
-		-- Allocate BLOCK: 2 bytes
-		local BLOCK_START = Allocate(2)
 		local Length = #Value.FullName
-		buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
+		buffer.writeu16(SendBuffer, BLOCK_START + 12, Length)
 		Allocate(Length)
 		buffer.writestring(SendBuffer, SendOffset, Value.FullName, Length)
+	elseif Value.Info == "None" then
+		buffer.writeu8(SendBuffer, BLOCK_START + 1, 1)
+	else
+		error(`Unexpected variant: {Value.Info}`)
 	end
 end
 
@@ -554,7 +553,7 @@ local Returns = table.freeze({
 			end
 		},
 		MouseTarget = {
-			Fire = function(Value: { Target: BasePart?, Parent: Instance?, Size: Vector3?, FullName: string? }): ()
+			Fire = function(Value: { Info: "Valid", Target: BasePart?, Parent: Instance?, Size: Vector3, FullName: string } | { Info: "None",  }): ()
 				Streamer_WriteEVENT_MouseTarget(Value)
 			end
 		},

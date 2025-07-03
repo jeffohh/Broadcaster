@@ -159,7 +159,7 @@ export type Viewer_RequestAction = { Action: "View", Player: Player } | { Action
 export type Viewer_WatchAction = ("Start" | "Stop")
 export type Viewer_LogEntry = { DateFormat: string, Message: string }
 export type Streamer_Action = ("Start" | "Stop")
-export type Streamer_MouseTargetInfo = { Target: BasePart?, Parent: Instance?, Size: Vector3?, FullName: string? }
+export type Streamer_MouseTargetInfo = { Info: "Valid", Target: BasePart?, Parent: Instance?, Size: Vector3, FullName: string } | { Info: "None",  }
 local function Viewer_ReadEVENT_Request(): ({ Action: "View", Player: Player } | { Action: "Leave",  } | { Action: "Logs",  })
 	-- Read BLOCK: 1 bytes
 	local BLOCK_START = Read(1)
@@ -293,41 +293,45 @@ local function Streamer_ReadEVENT_MouseIcon(): (string)
 	return Value1
 end
 
-local function Streamer_ReadEVENT_MouseTarget(): ({ Target: BasePart?, Parent: Instance?, Size: Vector3?, FullName: string? })
-	-- Read BLOCK: 2 bytes
-	local BLOCK_START = Read(2)
-	local Value = {} :: any
-	RecieveInstanceCursor += 1
-	if typeof(RecieveInstances[RecieveInstanceCursor]) == "Instance" then
-		RecieveInstanceCursor -= 1
+local function Streamer_ReadEVENT_MouseTarget(): ({ Info: "Valid", Target: BasePart?, Parent: Instance?, Size: Vector3, FullName: string } | { Info: "None",  })
+	-- Read BLOCK: 1 bytes
+	local BLOCK_START = Read(1)
+	local Tag = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	local Value = true :: any
+	if Tag == 0 then
+		-- Read BLOCK: 14 bytes
+		local BLOCK_START = Read(14)
+		Value = {} :: any
 		RecieveInstanceCursor += 1
-		Value.Target = RecieveInstances[RecieveInstanceCursor]
-		if typeof(Value.Target) ~= "Instance" then error(`Expected an Instance, got {typeof(Value.Target)} instead.`) end
-		if not Value.Target:IsA("BasePart") then error(`Expected an Instance of type "BasePart", got "{Value.Target.ClassName}" instead.`) end
-	end
-	RecieveInstanceCursor += 1
-	if typeof(RecieveInstances[RecieveInstanceCursor]) == "Instance" then
-		RecieveInstanceCursor -= 1
+		if typeof(RecieveInstances[RecieveInstanceCursor]) == "Instance" then
+			RecieveInstanceCursor -= 1
+			RecieveInstanceCursor += 1
+			Value.Target = RecieveInstances[RecieveInstanceCursor]
+			if typeof(Value.Target) ~= "Instance" then error(`Expected an Instance, got {typeof(Value.Target)} instead.`) end
+			if not Value.Target:IsA("BasePart") then error(`Expected an Instance of type "BasePart", got "{Value.Target.ClassName}" instead.`) end
+		end
 		RecieveInstanceCursor += 1
-		Value.Parent = RecieveInstances[RecieveInstanceCursor]
-		if typeof(Value.Parent) ~= "Instance" then error(`Expected an Instance, got {typeof(Value.Parent)} instead.`) end
-		if not Value.Parent:IsA("Instance") then error(`Expected an Instance of type "Instance", got "{Value.Parent.ClassName}" instead.`) end
-	end
-	if buffer.readu8(RecieveBuffer, BLOCK_START + 0) == 1 then
-		-- Read BLOCK: 12 bytes
-		local BLOCK_START = Read(12)
+		if typeof(RecieveInstances[RecieveInstanceCursor]) == "Instance" then
+			RecieveInstanceCursor -= 1
+			RecieveInstanceCursor += 1
+			Value.Parent = RecieveInstances[RecieveInstanceCursor]
+			if typeof(Value.Parent) ~= "Instance" then error(`Expected an Instance, got {typeof(Value.Parent)} instead.`) end
+			if not Value.Parent:IsA("Instance") then error(`Expected an Instance of type "Instance", got "{Value.Parent.ClassName}" instead.`) end
+		end
 		local X = buffer.readf32(RecieveBuffer, BLOCK_START + 0)
 		local Y = buffer.readf32(RecieveBuffer, BLOCK_START + 4)
 		local Z = buffer.readf32(RecieveBuffer, BLOCK_START + 8)
 		Value.Size = Vector3.new(X, Y, Z)
-	end
-	if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
-		-- Read BLOCK: 2 bytes
-		local BLOCK_START = Read(2)
-		local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+		local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 12)
 		Value.FullName = buffer.readstring(RecieveBuffer, Read(Length), Length)
 		if #Value.FullName < 0 then error(`Expected length of "Value.FullName" to be larger than 0, got {#Value.FullName} instead.`) end
 		if #Value.FullName > 512 then error(`Expected length of "Value.FullName" to be smaller than 512, got {#Value.FullName} instead.`) end
+		Value.Info = "Valid"
+	elseif Tag == 1 then
+		Value = {} :: any
+		Value.Info = "None"
+	else
+		error(`Unexpected variant: {Tag}`)
 	end
 	return Value
 end
@@ -459,7 +463,7 @@ Reliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instance
 				table.insert(Queue.Reliable[5], {Player, Value1} :: {any})
 			end
 		elseif Index == 6 then
-			local Value: { Target: BasePart?, Parent: Instance?, Size: Vector3?, FullName: string? } = Streamer_ReadEVENT_MouseTarget()
+			local Value: { Info: "Valid", Target: BasePart?, Parent: Instance?, Size: Vector3, FullName: string } | { Info: "None",  } = Streamer_ReadEVENT_MouseTarget()
 			if Events.Reliable[6] ~= nil then
 				Events.Reliable[6](Player, Value)
 			else
@@ -757,7 +761,7 @@ local Returns = table.freeze({
 			end
 		},
 		MouseTarget = {
-			On = function(Listener: (Player: Player, Value: { Target: BasePart?, Parent: Instance?, Size: Vector3?, FullName: string? }) -> ()): () -> ()
+			On = function(Listener: (Player: Player, Value: { Info: "Valid", Target: BasePart?, Parent: Instance?, Size: Vector3, FullName: string } | { Info: "None",  }) -> ()): () -> ()
 				Events.Reliable[6] = Listener
 				for Index, Arguments in Queue.Reliable[6] do
 					Listener(table.unpack(Arguments))
