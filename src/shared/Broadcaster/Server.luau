@@ -79,6 +79,9 @@ function Server:View(viewer, streamer)
     -- cannot watch yourself
     if viewer == streamer then return end
 
+    -- cannot watch streamer if streamer is watching someone else
+    if self.viewers[streamer] then return end
+
     -- if previously watching someone, leave
     if self.viewers[viewer] then
         self:Leave(viewer)
